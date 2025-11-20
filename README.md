@@ -97,17 +97,40 @@ The log shows:
 
 ## Usage
 
-Add the interpolation to your status line:
+### Status Bar
 
+The plugin automatically adds outdated package counts to your status bar.
+
+**Without Catppuccin theme:**
+
+Add to your `.tmux.conf`:
+```tmux
+set -ag status-right "#{@outdated_packages}"
+```
+
+Or with custom colors:
+```tmux
+set -ag status-right "#[fg=yellow]#{@outdated_packages}#[default]"
+```
+
+**With Catppuccin theme:**
+
+Add to your `.tmux.conf`:
 ```tmux
 set -ag status-right "#{E:@catppuccin_status_outdated_packages}"
 ```
 
-Or for non-Catppuccin themes:
+The plugin works with any tmux theme or configuration!
 
-```tmux
-set -ag status-right "#($HOME/.tmux/plugins/tmux-outdated-packages/scripts/outdated-packages.sh)"
-```
+### Interactive Popup
+
+View detailed list of outdated packages:
+- **Mouse**: Click on the status bar (right side)
+- **Keyboard**: `prefix + u`
+
+The popup shows:
+- Full list of outdated packages per manager
+- Loading indicator while checking
 
 ## Requirements
 

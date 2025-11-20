@@ -3,17 +3,10 @@
 # This script just reads the cached results - polling happens in background
 CACHE_DIR="${TMPDIR:-/tmp}/tmux-outdated-packages"
 RESULT_FILE="$CACHE_DIR/result.txt"
+CURRENT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
-# Icons using nerdfonts
-BREW_ICON=""
-NPM_ICON=""
-PIP_ICON=""
-GEM_ICON=""
-CARGO_ICON=""
-COMPOSER_ICON=""
-GO_ICON=""
-APT_ICON=""
-DNF_ICON=""
+# Load shared icons
+source "$CURRENT_DIR/icons.sh"
 
 format_output() {
 	local output=""
@@ -67,9 +60,8 @@ format_output() {
 	echo "$output"
 }
 
-main() {
-	# Just read and format the cached results
-	format_output
-}
-
-main
+# Run and output with trailing space for padding
+output=$(format_output)
+if [ -n "$output" ]; then
+	echo "$output "  # Add trailing space
+fi
