@@ -3,3 +3,4 @@
 *.swp
 *.swo
 *~
+poller_stdout.log

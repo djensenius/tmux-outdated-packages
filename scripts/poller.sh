@@ -2,6 +2,7 @@
 
 CACHE_DIR="${TMPDIR:-/tmp}/tmux-outdated-packages"
 POLL_INTERVAL="${TMUX_OUTDATED_POLL_INTERVAL:-300}"  # Default 5 minutes
+WATCH_INTERVAL=5  # Check file changes every 5 seconds
 DEBUG_MODE="${TMUX_OUTDATED_DEBUG:-0}"
 LOG_FILE="$CACHE_DIR/poller.log"
 LOCK_FILE="$CACHE_DIR/poller.lock"
@@ -9,6 +10,7 @@ PID_FILE="$CACHE_DIR/poller.pid"
 
 # Package install directories for quick change detection
 BREW_CELLAR="${HOMEBREW_PREFIX:-/usr/local}/Cellar"
+BREW_TAPS="${HOMEBREW_PREFIX:-/usr/local}/Library/Taps"
 NPM_GLOBAL="$(npm config get prefix 2>/dev/null)/lib/node_modules"
 NPM_BIN="$(npm config get prefix 2>/dev/null)/bin"
 PIP_SITE="$(python3 -m site --user-site 2>/dev/null)"
@@ -58,6 +60,17 @@ should_check() {
 		return 0
 	fi
 	
+	# Check if poll interval passed
+	local last_check=0
+	if [ -f "$count_file" ]; then
+		last_check=$(stat -f %m "$count_file" 2>/dev/null || stat -c %Y "$count_file" 2>/dev/null || echo 0)
+	fi
+	local now=$(date +%s)
+	if [ $((now - last_check)) -ge "$POLL_INTERVAL" ]; then
+		log_debug "$name: Poll interval passed, checking..."
+		return 0
+	fi
+	
 	local IFS=':'
 	read -ra dirs <<< "$dirs_str"
 	
@@ -102,7 +115,7 @@ check_brew() {
 		return
 	fi
 	
-	if should_check "brew" "$BREW_CELLAR"; then
+	if should_check "brew" "$BREW_CELLAR:$BREW_TAPS"; then
 		local start=$(date +%s)
 		local count=$(brew outdated --quiet 2>/dev/null | wc -l | tr -d ' ')
 		local duration=$(($(date +%s) - start))
@@ -268,8 +281,8 @@ main() {
 	
 	# Poll loop
 	while true; do
-		log_debug "Sleeping for ${POLL_INTERVAL}s..."
-		sleep "$POLL_INTERVAL"
+		log_debug "Sleeping for ${WATCH_INTERVAL}s..."
+		sleep "$WATCH_INTERVAL"
 		run_checks_parallel
 	done
 }
