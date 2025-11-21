@@ -27,11 +27,6 @@ format_output() {
 		[ "$count" -gt 0 ] && output+=" ${PIP_ICON} ${count}"
 	}
 	
-	[ -f "$CACHE_DIR/gem.count" ] && {
-		local count=$(cat "$CACHE_DIR/gem.count")
-		[ "$count" -gt 0 ] && output+=" ${GEM_ICON} ${count}"
-	}
-	
 	[ -f "$CACHE_DIR/cargo.count" ] && {
 		local count=$(cat "$CACHE_DIR/cargo.count")
 		[ "$count" -gt 0 ] && output+=" ${CARGO_ICON} ${count}"

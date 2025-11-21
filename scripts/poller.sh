@@ -10,8 +10,8 @@ PID_FILE="$CACHE_DIR/poller.pid"
 # Package install directories for quick change detection
 BREW_CELLAR="${HOMEBREW_PREFIX:-/usr/local}/Cellar"
 NPM_GLOBAL="$(npm config get prefix 2>/dev/null)/lib/node_modules"
+NPM_BIN="$(npm config get prefix 2>/dev/null)/bin"
 PIP_SITE="$(python3 -m site --user-site 2>/dev/null)"
-GEM_DIR="$(gem env gemdir 2>/dev/null)"
 CARGO_BIN="${CARGO_HOME:-$HOME/.cargo}/bin"
 
 log_debug() {
@@ -49,8 +49,7 @@ get_dir_mtime() {
 
 should_check() {
 	local name=$1
-	local dir=$2
-	local mtime_file="$CACHE_DIR/${name}.mtime"
+	local dirs_str=$2
 	local count_file="$CACHE_DIR/${name}.count"
 	
 	# Always check on first run
@@ -59,23 +58,41 @@ should_check() {
 		return 0
 	fi
 	
-	# Check if directory changed
-	if [ -n "$dir" ] && [ -d "$dir" ]; then
-		local current_mtime=$(get_dir_mtime "$dir")
-		local cached_mtime=$(cat "$mtime_file" 2>/dev/null || echo "0")
-		
-		if [ "$current_mtime" != "$cached_mtime" ]; then
-			log_debug "$name: Directory changed (mtime: $cached_mtime -> $current_mtime), checking..."
-			echo "$current_mtime" > "$mtime_file"
-			return 0
-		else
-			log_debug "$name: No changes detected, skipping"
-		fi
-	else
+	local IFS=':'
+	read -ra dirs <<< "$dirs_str"
+	
+	if [ ${#dirs[@]} -eq 0 ]; then
 		log_debug "$name: No directory to monitor, checking on interval"
 		return 0
 	fi
 	
+	local changed=0
+	for i in "${!dirs[@]}"; do
+		local dir="${dirs[$i]}"
+		local mtime_file="$CACHE_DIR/${name}.mtime"
+		
+		# If multiple directories, use suffixed mtime files
+		if [ ${#dirs[@]} -gt 1 ]; then
+			mtime_file="$CACHE_DIR/${name}_${i}.mtime"
+		fi
+		
+		if [ -n "$dir" ] && [ -d "$dir" ]; then
+			local current_mtime=$(get_dir_mtime "$dir")
+			local cached_mtime=$(cat "$mtime_file" 2>/dev/null || echo "0")
+			
+			if [ "$current_mtime" != "$cached_mtime" ]; then
+				log_debug "$name: Directory $dir changed (mtime: $cached_mtime -> $current_mtime)"
+				echo "$current_mtime" > "$mtime_file"
+				changed=1
+			fi
+		fi
+	done
+	
+	if [ "$changed" -eq 1 ]; then
+		return 0
+	fi
+	
+	log_debug "$name: No changes detected, skipping"
 	return 1
 }
 
@@ -100,7 +117,7 @@ check_npm() {
 		return
 	fi
 	
-	if should_check "npm" "$NPM_GLOBAL"; then
+	if should_check "npm" "$NPM_GLOBAL:$NPM_BIN"; then
 		local start=$(date +%s)
 		local count=$(npm outdated -g --parseable 2>/dev/null | wc -l | tr -d ' ')
 		local duration=$(($(date +%s) - start))
@@ -121,21 +138,6 @@ check_pip() {
 		local duration=$(($(date +%s) - start))
 		echo "$count" > "$CACHE_DIR/pip.count"
 		log_debug "pip3: Found $count outdated packages (took ${duration}s)"
-	fi
-}
-
-check_gem() {
-	if ! command -v gem &> /dev/null; then
-		log_debug "gem: Not installed, skipping"
-		return
-	fi
-	
-	if should_check "gem" "$GEM_DIR"; then
-		local start=$(date +%s)
-		local count=$(gem outdated 2>/dev/null | wc -l | tr -d ' ')
-		local duration=$(($(date +%s) - start))
-		echo "$count" > "$CACHE_DIR/gem.count"
-		log_debug "gem: Found $count outdated packages (took ${duration}s)"
 	fi
 }
 
@@ -226,7 +228,6 @@ run_checks_parallel() {
 	check_brew &
 	check_npm &
 	check_pip &
-	check_gem &
 	check_cargo &
 	check_composer &
 	check_go &

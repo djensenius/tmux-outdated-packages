@@ -51,8 +51,8 @@ main() {
 	local catppuccin_active=$(tmux show-option -gqv "@catppuccin_status_application")
 	
 	if [ -n "$catppuccin_active" ]; then
-		# Catppuccin is active, use its formatting
-		set_tmux_option "@catppuccin_status_outdated_packages" "#[fg=$text_color]$script_call#[default]"
+		# Catppuccin is active, use its formatting with styled left separator
+		set_tmux_option "@catppuccin_status_outdated_packages" "#[fg=#{E:@thm_peach}]#{@_ctp_connect_style}#{@catppuccin_status_left_separator}#[fg=#{E:@catppuccin_status_module_text_fg},bg=#{E:@thm_peach}]#{@catppuccin_status_middle_separator}#[fg=#{E:@thm_text},bg=#{E:@catppuccin_status_module_text_bg}]$script_call#[fg=#{E:@catppuccin_status_module_text_bg}]#{@_ctp_connect_style}#{@catppuccin_status_right_separator}"
 	else
 		# No catppuccin - use simple formatting
 		set_tmux_option "@catppuccin_status_outdated_packages" "#[fg=$text_color]$script_call#[default]"

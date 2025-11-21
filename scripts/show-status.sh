@@ -15,5 +15,6 @@ if [ -f "$CHECKING_FILE" ]; then
     echo " ${SPINNER[$INDEX]} "
 else
     # Not checking, show the actual counts by calling the script
+    # This will output nothing if there are no outdated packages
     "$(dirname "$0")/outdated-packages.sh"
 fi
