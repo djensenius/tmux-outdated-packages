@@ -52,6 +52,11 @@ format_output() {
 		[ "$count" -gt 0 ] && output+=" ${DNF_ICON} ${count}"
 	}
 	
+	[ -f "$CACHE_DIR/mise.count" ] && {
+		local count=$(cat "$CACHE_DIR/mise.count")
+		[ "$count" -gt 0 ] && output+=" ${MISE_ICON} ${count}"
+	}
+	
 	echo "$output"
 }
 

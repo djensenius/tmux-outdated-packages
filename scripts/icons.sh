@@ -6,12 +6,13 @@
 # Icons using nerdfonts - using printf to ensure proper encoding
 export BREW_ICON=$(printf '\ue7fd')  # Homebrew nerdfonts icon (nf-dev-homebrew)
 export NPM_ICON=$(printf '\ue71e')   # Nerdfonts npm icon
-export PIP_ICON=$(printf '\uf487')   # Python icon
+export PIP_ICON=$(printf '\udb80\udf20')   # Python icon
 export CARGO_ICON=$(printf '\ue7a8') # Rust icon
 export COMPOSER_ICON=$(printf '\ue608') # PHP icon
 export GO_ICON=$(printf '\ue626')    # Go gopher
 export APT_ICON=$(printf '\uf306')   # Debian icon
 export DNF_ICON=$(printf '\uf30d')   # Fedora icon
+export MISE_ICON=$(printf '\uf0ad')  # Wrench icon for mise
 
 # Alternative: Use emojis instead (uncomment to use)
 # export BREW_ICON="🍺"

@@ -117,9 +117,11 @@ check_brew() {
 	
 	if should_check "brew" "$BREW_CELLAR:$BREW_TAPS"; then
 		local start=$(date +%s)
-		local count=$(brew outdated --quiet 2>/dev/null | wc -l | tr -d ' ')
+		local output=$(brew outdated --verbose 2>/dev/null)
+		local count=$(echo "$output" | grep -c '[^[:space:]]' || echo "0")
 		local duration=$(($(date +%s) - start))
 		echo "$count" > "$CACHE_DIR/brew.count"
+		echo "$output" > "$CACHE_DIR/brew.list"
 		log_debug "brew: Found $count outdated packages (took ${duration}s)"
 	fi
 }
@@ -132,9 +134,11 @@ check_npm() {
 	
 	if should_check "npm" "$NPM_GLOBAL:$NPM_BIN"; then
 		local start=$(date +%s)
-		local count=$(npm outdated -g --parseable 2>/dev/null | wc -l | tr -d ' ')
+		local output=$(npm outdated -g 2>/dev/null)
+		local count=$(echo "$output" | tail -n +2 | wc -l | tr -d ' ')
 		local duration=$(($(date +%s) - start))
 		echo "$count" > "$CACHE_DIR/npm.count"
+		echo "$output" > "$CACHE_DIR/npm.list"
 		log_debug "npm: Found $count outdated packages (took ${duration}s)"
 	fi
 }
@@ -147,9 +151,11 @@ check_pip() {
 	
 	if should_check "pip" "$PIP_SITE"; then
 		local start=$(date +%s)
-		local count=$(pip3 list --outdated 2>/dev/null | tail -n +3 | wc -l | tr -d ' ')
+		local output=$(pip3 list --outdated 2>/dev/null)
+		local count=$(echo "$output" | tail -n +3 | wc -l | tr -d ' ')
 		local duration=$(($(date +%s) - start))
 		echo "$count" > "$CACHE_DIR/pip.count"
+		echo "$output" > "$CACHE_DIR/pip.list"
 		log_debug "pip3: Found $count outdated packages (took ${duration}s)"
 	fi
 }
@@ -162,9 +168,12 @@ check_cargo() {
 	
 	if should_check "cargo" "$CARGO_BIN"; then
 		local start=$(date +%s)
-		local count=$(cargo install-update --list 2>/dev/null | grep -c "^[a-z]" || echo "0")
+		local raw_output=$(cargo install-update --list 2>/dev/null)
+		local output=$(echo "$raw_output" | grep -E "Needs update|Yes[[:space:]]*$")
+		local count=$(echo "$output" | grep -c "Yes[[:space:]]*$" || echo "0")
 		local duration=$(($(date +%s) - start))
 		echo "$count" > "$CACHE_DIR/cargo.count"
+		echo "$output" > "$CACHE_DIR/cargo.list"
 		log_debug "cargo: Found $count outdated packages (took ${duration}s)"
 	fi
 }
@@ -177,9 +186,11 @@ check_composer() {
 	
 	if should_check "composer" ""; then
 		local start=$(date +%s)
-		local count=$(composer global outdated --format=json 2>/dev/null | grep -o '"name"' | wc -l | tr -d ' ')
+		local output=$(composer global outdated 2>/dev/null)
+		local count=$(echo "$output" | grep -c '^[a-z]' || echo "0")
 		local duration=$(($(date +%s) - start))
 		echo "$count" > "$CACHE_DIR/composer.count"
+		echo "$output" > "$CACHE_DIR/composer.list"
 		log_debug "composer: Found $count outdated packages (took ${duration}s)"
 	fi
 }
@@ -192,9 +203,11 @@ check_go() {
 	
 	if should_check "go" ""; then
 		local start=$(date +%s)
-		local count=$(go-global-update -n 2>/dev/null | grep -c "outdated" || echo "0")
+		local output=$(go-global-update -n 2>/dev/null)
+		local count=$(echo "$output" | grep -c "outdated" || echo "0")
 		local duration=$(($(date +%s) - start))
 		echo "$count" > "$CACHE_DIR/go.count"
+		echo "$output" > "$CACHE_DIR/go.list"
 		log_debug "go: Found $count outdated packages (took ${duration}s)"
 	fi
 }
@@ -208,9 +221,11 @@ check_apt() {
 	if [ -r /var/lib/apt/lists ] || [ "$EUID" -eq 0 ]; then
 		if should_check "apt" "/var/lib/apt/lists"; then
 			local start=$(date +%s)
-			local count=$(apt list --upgradable 2>/dev/null | grep -c "upgradable" || echo "0")
+			local output=$(apt list --upgradable 2>/dev/null)
+			local count=$(echo "$output" | grep -c "upgradable" || echo "0")
 			local duration=$(($(date +%s) - start))
 			echo "$count" > "$CACHE_DIR/apt.count"
+			echo "$output" > "$CACHE_DIR/apt.list"
 			log_debug "apt: Found $count outdated packages (took ${duration}s)"
 		fi
 	else
@@ -226,10 +241,39 @@ check_dnf() {
 	
 	if should_check "dnf" ""; then
 		local start=$(date +%s)
-		local count=$(dnf list --upgrades 2>/dev/null | tail -n +2 | wc -l | tr -d ' ')
+		local output=$(dnf list --upgrades 2>/dev/null)
+		local count=$(echo "$output" | tail -n +2 | wc -l | tr -d ' ')
 		local duration=$(($(date +%s) - start))
 		echo "$count" > "$CACHE_DIR/dnf.count"
+		echo "$output" > "$CACHE_DIR/dnf.list"
 		log_debug "dnf: Found $count outdated packages (took ${duration}s)"
+	fi
+}
+
+check_mise() {
+	if ! command -v mise &> /dev/null; then
+		log_debug "mise: Not installed, skipping"
+		return
+	fi
+	
+	# Check common config locations
+	local config_files="$HOME/.config/mise/config.toml:$HOME/.mise.toml:$HOME/.tool-versions"
+	
+	if should_check "mise" "$config_files"; then
+		local start=$(date +%s)
+		local output=$(mise outdated 2>/dev/null)
+		local count=0
+		
+		if [[ "$output" != *"All tools are up to date"* ]] && [ -n "$output" ]; then
+			count=$(echo "$output" | grep -c '[^[:space:]]')
+		else
+			output=""
+		fi
+		
+		local duration=$(($(date +%s) - start))
+		echo "$count" > "$CACHE_DIR/mise.count"
+		echo "$output" > "$CACHE_DIR/mise.list"
+		log_debug "mise: Found $count outdated packages (took ${duration}s)"
 	fi
 }
 
@@ -246,6 +290,7 @@ run_checks_parallel() {
 	check_go &
 	check_apt &
 	check_dnf &
+	check_mise &
 	
 	# Wait for all background jobs to complete
 	wait

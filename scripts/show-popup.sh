@@ -64,15 +64,95 @@ if [ -f "$CACHE_DIR/npm.count" ]; then
     fi
 fi
 
-# Check gems
-if [ -f "$CACHE_DIR/gem.count" ]; then
-    count=$(cat "$CACHE_DIR/gem.count")
+# Check cargo
+if [ -f "$CACHE_DIR/cargo.count" ]; then
+    count=$(cat "$CACHE_DIR/cargo.count")
     if [ "$count" -gt 0 ]; then
         has_outdated=true
-        echo "${GEM_ICON} Ruby gems ($count outdated)" >> "$TMPFILE"
+        echo "${CARGO_ICON} Cargo ($count outdated)" >> "$TMPFILE"
         echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" >> "$TMPFILE"
-        if [ -f "$CACHE_DIR/gem.list" ]; then
-            cat "$CACHE_DIR/gem.list" >> "$TMPFILE"
+        if [ -f "$CACHE_DIR/cargo.list" ]; then
+            cat "$CACHE_DIR/cargo.list" >> "$TMPFILE"
+        else
+            echo "Loading..." >> "$TMPFILE"
+        fi
+        echo "" >> "$TMPFILE"
+    fi
+fi
+
+# Check composer
+if [ -f "$CACHE_DIR/composer.count" ]; then
+    count=$(cat "$CACHE_DIR/composer.count")
+    if [ "$count" -gt 0 ]; then
+        has_outdated=true
+        echo "${COMPOSER_ICON} Composer ($count outdated)" >> "$TMPFILE"
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" >> "$TMPFILE"
+        if [ -f "$CACHE_DIR/composer.list" ]; then
+            cat "$CACHE_DIR/composer.list" >> "$TMPFILE"
+        else
+            echo "Loading..." >> "$TMPFILE"
+        fi
+        echo "" >> "$TMPFILE"
+    fi
+fi
+
+# Check go
+if [ -f "$CACHE_DIR/go.count" ]; then
+    count=$(cat "$CACHE_DIR/go.count")
+    if [ "$count" -gt 0 ]; then
+        has_outdated=true
+        echo "${GO_ICON} Go ($count outdated)" >> "$TMPFILE"
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" >> "$TMPFILE"
+        if [ -f "$CACHE_DIR/go.list" ]; then
+            cat "$CACHE_DIR/go.list" >> "$TMPFILE"
+        else
+            echo "Loading..." >> "$TMPFILE"
+        fi
+        echo "" >> "$TMPFILE"
+    fi
+fi
+
+# Check apt
+if [ -f "$CACHE_DIR/apt.count" ]; then
+    count=$(cat "$CACHE_DIR/apt.count")
+    if [ "$count" -gt 0 ]; then
+        has_outdated=true
+        echo "${APT_ICON} Apt ($count outdated)" >> "$TMPFILE"
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" >> "$TMPFILE"
+        if [ -f "$CACHE_DIR/apt.list" ]; then
+            cat "$CACHE_DIR/apt.list" >> "$TMPFILE"
+        else
+            echo "Loading..." >> "$TMPFILE"
+        fi
+        echo "" >> "$TMPFILE"
+    fi
+fi
+
+# Check dnf
+if [ -f "$CACHE_DIR/dnf.count" ]; then
+    count=$(cat "$CACHE_DIR/dnf.count")
+    if [ "$count" -gt 0 ]; then
+        has_outdated=true
+        echo "${DNF_ICON} DNF ($count outdated)" >> "$TMPFILE"
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" >> "$TMPFILE"
+        if [ -f "$CACHE_DIR/dnf.list" ]; then
+            cat "$CACHE_DIR/dnf.list" >> "$TMPFILE"
+        else
+            echo "Loading..." >> "$TMPFILE"
+        fi
+        echo "" >> "$TMPFILE"
+    fi
+fi
+
+# Check mise
+if [ -f "$CACHE_DIR/mise.count" ]; then
+    count=$(cat "$CACHE_DIR/mise.count")
+    if [ "$count" -gt 0 ]; then
+        has_outdated=true
+        echo "${MISE_ICON} Mise ($count outdated)" >> "$TMPFILE"
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" >> "$TMPFILE"
+        if [ -f "$CACHE_DIR/mise.list" ]; then
+            cat "$CACHE_DIR/mise.list" >> "$TMPFILE"
         else
             echo "Loading..." >> "$TMPFILE"
         fi
