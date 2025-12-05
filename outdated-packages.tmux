@@ -5,7 +5,8 @@ CURRENT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 get_tmux_option() {
 	local option=$1
 	local default_value=$2
-	local option_value=$(tmux show-option -gqv "$option")
+	local option_value
+	option_value=$(tmux show-option -gqv "$option")
 	if [ -z "$option_value" ]; then
 		echo "$default_value"
 	else
@@ -26,7 +27,8 @@ start_poller() {
 	
 	# Check if poller is already running
 	if [ -f "$pid_file" ]; then
-		local pid=$(cat "$pid_file")
+		local pid
+		pid=$(cat "$pid_file")
 		if kill -0 "$pid" 2>/dev/null; then
 			return 0
 		fi
@@ -39,7 +41,8 @@ start_poller() {
 }
 
 main() {
-	local text_color=$(get_tmux_option "@outdated_text_color" "white")
+	local text_color
+	text_color=$(get_tmux_option "@outdated_text_color" "white")
 	
 	# Build the status module - use show-status.sh which handles spinner
 	local script_call="#($CURRENT_DIR/scripts/show-status.sh)"
@@ -48,7 +51,8 @@ main() {
 	set_tmux_option "@outdated_packages" "$script_call"
 	
 	# Check if catppuccin is installed/active
-	local catppuccin_active=$(tmux show-option -gqv "@catppuccin_status_application")
+	local catppuccin_active
+	catppuccin_active=$(tmux show-option -gqv "@catppuccin_status_application")
 	
 	if [ -n "$catppuccin_active" ]; then
 		# Catppuccin is active, use its formatting with styled left separator
