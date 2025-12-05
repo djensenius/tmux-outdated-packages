@@ -2,6 +2,12 @@
 
 A tmux plugin that displays outdated global packages from common package managers in your status line.
 
+![Homebrew Screenshot](screenshots/homebrew.png)
+![Linux Screenshot](screenshots/linux.png)
+![Popup Screenshot](screenshots/popup.png)
+
+_Screenshots using [Catppuccin](https://github.com/catppuccin/catppuccin) theme. See [github.com/djensenius/dotfiles](https://github.com/djensenius/dotfiles) for configuration examples._
+
 ## Features
 
 - Shows outdated package counts for:

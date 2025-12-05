@@ -33,7 +33,8 @@ setup() {
 
 check_if_running() {
 	if [ -f "$PID_FILE" ]; then
-		local pid=$(cat "$PID_FILE")
+		local pid
+		pid=$(cat "$PID_FILE")
 		if kill -0 "$pid" 2>/dev/null; then
 			return 0
 		fi
@@ -65,7 +66,8 @@ should_check() {
 	if [ -f "$count_file" ]; then
 		last_check=$(stat -f %m "$count_file" 2>/dev/null || stat -c %Y "$count_file" 2>/dev/null || echo 0)
 	fi
-	local now=$(date +%s)
+	local now
+	now=$(date +%s)
 	if [ $((now - last_check)) -ge "$POLL_INTERVAL" ]; then
 		log_debug "$name: Poll interval passed, checking..."
 		return 0
@@ -90,8 +92,10 @@ should_check() {
 		fi
 		
 		if [ -n "$dir" ] && [ -d "$dir" ]; then
-			local current_mtime=$(get_dir_mtime "$dir")
-			local cached_mtime=$(cat "$mtime_file" 2>/dev/null || echo "0")
+			local current_mtime
+			current_mtime=$(get_dir_mtime "$dir")
+			local cached_mtime
+			cached_mtime=$(cat "$mtime_file" 2>/dev/null || echo "0")
 			
 			if [ "$current_mtime" != "$cached_mtime" ]; then
 				log_debug "$name: Directory $dir changed (mtime: $cached_mtime -> $current_mtime)"
@@ -116,9 +120,12 @@ check_brew() {
 	fi
 	
 	if should_check "brew" "$BREW_CELLAR:$BREW_TAPS"; then
-		local start=$(date +%s)
-		local output=$(brew outdated --verbose 2>/dev/null)
-		local count=$(echo "$output" | grep -c '[^[:space:]]' || echo "0")
+		local start
+		start=$(date +%s)
+		local output
+		output=$(brew outdated --verbose 2>/dev/null)
+		local count
+		count=$(echo "$output" | grep -c '[^[:space:]]' || echo "0")
 		local duration=$(($(date +%s) - start))
 		echo "$count" > "$CACHE_DIR/brew.count"
 		echo "$output" > "$CACHE_DIR/brew.list"
@@ -133,9 +140,12 @@ check_npm() {
 	fi
 	
 	if should_check "npm" "$NPM_GLOBAL:$NPM_BIN"; then
-		local start=$(date +%s)
-		local output=$(npm outdated -g 2>/dev/null)
-		local count=$(echo "$output" | tail -n +2 | wc -l | tr -d ' ')
+		local start
+		start=$(date +%s)
+		local output
+		output=$(npm outdated -g 2>/dev/null)
+		local count
+		count=$(echo "$output" | tail -n +2 | wc -l | tr -d ' ')
 		local duration=$(($(date +%s) - start))
 		echo "$count" > "$CACHE_DIR/npm.count"
 		echo "$output" > "$CACHE_DIR/npm.list"
@@ -150,9 +160,12 @@ check_pip() {
 	fi
 	
 	if should_check "pip" "$PIP_SITE"; then
-		local start=$(date +%s)
-		local output=$(pip3 list --outdated 2>/dev/null)
-		local count=$(echo "$output" | tail -n +3 | wc -l | tr -d ' ')
+		local start
+		start=$(date +%s)
+		local output
+		output=$(pip3 list --outdated 2>/dev/null)
+		local count
+		count=$(echo "$output" | tail -n +3 | wc -l | tr -d ' ')
 		local duration=$(($(date +%s) - start))
 		echo "$count" > "$CACHE_DIR/pip.count"
 		echo "$output" > "$CACHE_DIR/pip.list"
@@ -167,10 +180,14 @@ check_cargo() {
 	fi
 	
 	if should_check "cargo" "$CARGO_BIN"; then
-		local start=$(date +%s)
-		local raw_output=$(cargo install-update --list 2>/dev/null)
-		local output=$(echo "$raw_output" | grep -E "Needs update|Yes[[:space:]]*$")
-		local count=$(echo "$output" | grep -c "Yes[[:space:]]*$" || echo "0")
+		local start
+		start=$(date +%s)
+		local raw_output
+		raw_output=$(cargo install-update --list 2>/dev/null)
+		local output
+		output=$(echo "$raw_output" | grep -E "Needs update|Yes[[:space:]]*$")
+		local count
+		count=$(echo "$output" | grep -c "Yes[[:space:]]*$" || echo "0")
 		local duration=$(($(date +%s) - start))
 		echo "$count" > "$CACHE_DIR/cargo.count"
 		echo "$output" > "$CACHE_DIR/cargo.list"
@@ -185,9 +202,12 @@ check_composer() {
 	fi
 	
 	if should_check "composer" ""; then
-		local start=$(date +%s)
-		local output=$(composer global outdated 2>/dev/null)
-		local count=$(echo "$output" | grep -c '^[a-z]' || echo "0")
+		local start
+		start=$(date +%s)
+		local output
+		output=$(composer global outdated 2>/dev/null)
+		local count
+		count=$(echo "$output" | grep -c '^[a-z]' || echo "0")
 		local duration=$(($(date +%s) - start))
 		echo "$count" > "$CACHE_DIR/composer.count"
 		echo "$output" > "$CACHE_DIR/composer.list"
@@ -202,9 +222,12 @@ check_go() {
 	fi
 	
 	if should_check "go" ""; then
-		local start=$(date +%s)
-		local output=$(go-global-update -n 2>/dev/null)
-		local count=$(echo "$output" | grep -c "outdated" || echo "0")
+		local start
+		start=$(date +%s)
+		local output
+		output=$(go-global-update -n 2>/dev/null)
+		local count
+		count=$(echo "$output" | grep -c "outdated" || echo "0")
 		local duration=$(($(date +%s) - start))
 		echo "$count" > "$CACHE_DIR/go.count"
 		echo "$output" > "$CACHE_DIR/go.list"
@@ -220,9 +243,12 @@ check_apt() {
 	
 	if [ -r /var/lib/apt/lists ] || [ "$EUID" -eq 0 ]; then
 		if should_check "apt" "/var/lib/apt/lists"; then
-			local start=$(date +%s)
-			local output=$(apt list --upgradable 2>/dev/null)
-			local count=$(echo "$output" | grep -c "upgradable" || echo "0")
+			local start
+			start=$(date +%s)
+			local output
+			output=$(apt list --upgradable 2>/dev/null)
+			local count
+			count=$(echo "$output" | grep -c "upgradable" || echo "0")
 			local duration=$(($(date +%s) - start))
 			echo "$count" > "$CACHE_DIR/apt.count"
 			echo "$output" > "$CACHE_DIR/apt.list"
@@ -240,9 +266,12 @@ check_dnf() {
 	fi
 	
 	if should_check "dnf" ""; then
-		local start=$(date +%s)
-		local output=$(dnf list --upgrades 2>/dev/null)
-		local count=$(echo "$output" | tail -n +2 | wc -l | tr -d ' ')
+		local start
+		start=$(date +%s)
+		local output
+		output=$(dnf list --upgrades 2>/dev/null)
+		local count
+		count=$(echo "$output" | tail -n +2 | wc -l | tr -d ' ')
 		local duration=$(($(date +%s) - start))
 		echo "$count" > "$CACHE_DIR/dnf.count"
 		echo "$output" > "$CACHE_DIR/dnf.list"
@@ -260,8 +289,10 @@ check_mise() {
 	local config_files="$HOME/.config/mise/config.toml:$HOME/.mise.toml:$HOME/.tool-versions"
 	
 	if should_check "mise" "$config_files"; then
-		local start=$(date +%s)
-		local output=$(mise outdated 2>/dev/null)
+		local start
+		start=$(date +%s)
+		local output
+		output=$(mise outdated 2>/dev/null)
 		local count=0
 		
 		if [[ "$output" != *"All tools are up to date"* ]] && [ -n "$output" ]; then
@@ -279,7 +310,8 @@ check_mise() {
 
 run_checks_parallel() {
 	log_debug "--- Starting check cycle ---"
-	local cycle_start=$(date +%s)
+	local cycle_start
+	cycle_start=$(date +%s)
 	
 	# Run all checks in parallel background jobs
 	check_brew &

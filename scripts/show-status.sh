@@ -11,7 +11,7 @@ if [ -f "$CHECKING_FILE" ]; then
     # This creates faster animation since tmux status updates every second
     EPOCH=$(date +%s)
     # Use last digit of epoch and multiply by a random-ish number for variation
-    INDEX=$(( ($EPOCH * 3) % ${#SPINNER[@]} ))
+    INDEX=$(( (EPOCH * 3) % ${#SPINNER[@]} ))
     echo " ${SPINNER[$INDEX]} "
 else
     # Not checking, show the actual counts by calling the script

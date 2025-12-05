@@ -4,6 +4,7 @@ CACHE_DIR="${TMPDIR:-/tmp}/tmux-outdated-packages"
 CURRENT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
 # Load shared icons
+# shellcheck disable=SC1091
 source "$CURRENT_DIR/icons.sh"
 
 # Build a temporary file with the content
@@ -12,7 +13,7 @@ TMPFILE=$(mktemp)
 # Header
 cat > "$TMPFILE" << 'HEADER'
 ╔══════════════════════════════════════════════════════════╗
-║           📦 Outdated Packages                          ║
+║                    📦 Outdated Packages                  ║
 ╚══════════════════════════════════════════════════════════╝
 
 HEADER
@@ -180,9 +181,11 @@ if [ "$has_outdated" = false ] && [ "$is_loading" = false ]; then
     echo "✨ All packages are up to date!" >> "$TMPFILE"
 fi
 
-echo "" >> "$TMPFILE"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" >> "$TMPFILE"
-echo "Press q or ESC to close  |  Use ↑↓ or j/k to scroll" >> "$TMPFILE"
+{
+    echo ""
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "Press q or ESC to close  |  Use ↑↓ or j/k to scroll"
+} >> "$TMPFILE"
 
 # Show in tmux popup with less
 tmux display-popup -E -w 90% -h 90% "less -r $TMPFILE; rm -f $TMPFILE"
