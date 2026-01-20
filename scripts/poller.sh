@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 
 CACHE_DIR="${TMPDIR:-/tmp}/tmux-outdated-packages"
+export PATH="$PATH:/opt/homebrew/bin:/usr/local/bin"
 POLL_INTERVAL="${TMUX_OUTDATED_POLL_INTERVAL:-300}"  # Default 5 minutes
 WATCH_INTERVAL=5  # Check file changes every 5 seconds
+CHECK_TIMEOUT=120 # Timeout for each check in seconds
 DEBUG_MODE="${TMUX_OUTDATED_DEBUG:-0}"
 LOG_FILE="$CACHE_DIR/poller.log"
 LOCK_FILE="$CACHE_DIR/poller.lock"
@@ -123,7 +125,7 @@ check_brew() {
 		local start
 		start=$(date +%s)
 		local output
-		output=$(brew outdated --verbose 2>/dev/null)
+		output=$(timeout "$CHECK_TIMEOUT" brew outdated --verbose 2>/dev/null)
 		local count
 		count=$(echo "$output" | grep -c '[^[:space:]]' || echo "0")
 		local duration=$(($(date +%s) - start))
@@ -143,7 +145,7 @@ check_npm() {
 		local start
 		start=$(date +%s)
 		local output
-		output=$(npm outdated -g 2>/dev/null)
+		output=$(timeout "$CHECK_TIMEOUT" npm outdated -g 2>/dev/null)
 		local count
 		count=$(echo "$output" | tail -n +2 | wc -l | tr -d ' ')
 		local duration=$(($(date +%s) - start))
@@ -163,7 +165,7 @@ check_pip() {
 		local start
 		start=$(date +%s)
 		local output
-		output=$(pip3 list --outdated 2>/dev/null)
+		output=$(timeout "$CHECK_TIMEOUT" pip3 list --outdated 2>/dev/null)
 		local count
 		count=$(echo "$output" | tail -n +3 | wc -l | tr -d ' ')
 		local duration=$(($(date +%s) - start))
@@ -183,7 +185,7 @@ check_cargo() {
 		local start
 		start=$(date +%s)
 		local raw_output
-		raw_output=$(cargo install-update --list 2>/dev/null)
+		raw_output=$(timeout "$CHECK_TIMEOUT" cargo install-update --list 2>/dev/null)
 		local output
 		output=$(echo "$raw_output" | grep -E "Needs update|Yes[[:space:]]*$")
 		local count
@@ -205,7 +207,7 @@ check_composer() {
 		local start
 		start=$(date +%s)
 		local output
-		output=$(composer global outdated 2>/dev/null)
+		output=$(timeout "$CHECK_TIMEOUT" composer global outdated 2>/dev/null)
 		local count
 		count=$(echo "$output" | grep -c '^[a-z]' || echo "0")
 		local duration=$(($(date +%s) - start))
@@ -225,7 +227,7 @@ check_go() {
 		local start
 		start=$(date +%s)
 		local output
-		output=$(go-global-update -n 2>/dev/null)
+		output=$(timeout "$CHECK_TIMEOUT" go-global-update -n 2>/dev/null)
 		local count
 		count=$(echo "$output" | grep -c "outdated" || echo "0")
 		local duration=$(($(date +%s) - start))
@@ -246,7 +248,7 @@ check_apt() {
 			local start
 			start=$(date +%s)
 			local output
-			output=$(apt list --upgradable 2>/dev/null)
+			output=$(timeout "$CHECK_TIMEOUT" apt list --upgradable 2>/dev/null)
 			local count
 			count=$(echo "$output" | grep -c "upgradable" || echo "0")
 			local duration=$(($(date +%s) - start))
@@ -269,7 +271,7 @@ check_dnf() {
 		local start
 		start=$(date +%s)
 		local output
-		output=$(dnf list --upgrades 2>/dev/null)
+		output=$(timeout "$CHECK_TIMEOUT" dnf list --upgrades 2>/dev/null)
 		local count
 		count=$(echo "$output" | tail -n +2 | wc -l | tr -d ' ')
 		local duration=$(($(date +%s) - start))
@@ -292,7 +294,7 @@ check_mise() {
 		local start
 		start=$(date +%s)
 		local output
-		output=$(mise outdated 2>/dev/null)
+		output=$(timeout "$CHECK_TIMEOUT" mise outdated 2>/dev/null)
 		local count=0
 		
 		if [[ "$output" != *"All tools are up to date"* ]] && [ -n "$output" ]; then
