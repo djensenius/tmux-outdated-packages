@@ -39,6 +39,8 @@ if [ -f "$CACHE_DIR/brew.count" ]; then
     if [ "$count" -gt 0 ]; then
         has_outdated=true
         echo "${BREW_ICON} Homebrew ($count outdated)" >> "$TMPFILE"
+        echo "Check: brew outdated --verbose" >> "$TMPFILE"
+        echo "Update: brew upgrade" >> "$TMPFILE"
         echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" >> "$TMPFILE"
         if [ -f "$CACHE_DIR/brew.list" ]; then
             cat "$CACHE_DIR/brew.list" >> "$TMPFILE"
@@ -55,6 +57,8 @@ if [ -f "$CACHE_DIR/npm.count" ]; then
     if [ "$count" -gt 0 ]; then
         has_outdated=true
         echo "${NPM_ICON} npm global ($count outdated)" >> "$TMPFILE"
+        echo "Check: npm outdated -g" >> "$TMPFILE"
+        echo "Update: npm update -g" >> "$TMPFILE"
         echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" >> "$TMPFILE"
         if [ -f "$CACHE_DIR/npm.list" ]; then
             cat "$CACHE_DIR/npm.list" >> "$TMPFILE"
@@ -71,6 +75,8 @@ if [ -f "$CACHE_DIR/cargo.count" ]; then
     if [ "$count" -gt 0 ]; then
         has_outdated=true
         echo "${CARGO_ICON} Cargo ($count outdated)" >> "$TMPFILE"
+        echo "Check: cargo install-update --list" >> "$TMPFILE"
+        echo "Update: cargo install-update -a" >> "$TMPFILE"
         echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" >> "$TMPFILE"
         if [ -f "$CACHE_DIR/cargo.list" ]; then
             cat "$CACHE_DIR/cargo.list" >> "$TMPFILE"
@@ -87,6 +93,8 @@ if [ -f "$CACHE_DIR/composer.count" ]; then
     if [ "$count" -gt 0 ]; then
         has_outdated=true
         echo "${COMPOSER_ICON} Composer ($count outdated)" >> "$TMPFILE"
+        echo "Check: composer global outdated" >> "$TMPFILE"
+        echo "Update: composer global update" >> "$TMPFILE"
         echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" >> "$TMPFILE"
         if [ -f "$CACHE_DIR/composer.list" ]; then
             cat "$CACHE_DIR/composer.list" >> "$TMPFILE"
@@ -103,6 +111,8 @@ if [ -f "$CACHE_DIR/go.count" ]; then
     if [ "$count" -gt 0 ]; then
         has_outdated=true
         echo "${GO_ICON} Go ($count outdated)" >> "$TMPFILE"
+        echo "Check: go-global-update -n" >> "$TMPFILE"
+        echo "Update: go-global-update" >> "$TMPFILE"
         echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" >> "$TMPFILE"
         if [ -f "$CACHE_DIR/go.list" ]; then
             cat "$CACHE_DIR/go.list" >> "$TMPFILE"
@@ -119,6 +129,8 @@ if [ -f "$CACHE_DIR/apt.count" ]; then
     if [ "$count" -gt 0 ]; then
         has_outdated=true
         echo "${APT_ICON} Apt ($count outdated)" >> "$TMPFILE"
+        echo "Check: apt list --upgradable" >> "$TMPFILE"
+        echo "Update: sudo apt upgrade" >> "$TMPFILE"
         echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" >> "$TMPFILE"
         if [ -f "$CACHE_DIR/apt.list" ]; then
             cat "$CACHE_DIR/apt.list" >> "$TMPFILE"
@@ -135,6 +147,8 @@ if [ -f "$CACHE_DIR/dnf.count" ]; then
     if [ "$count" -gt 0 ]; then
         has_outdated=true
         echo "${DNF_ICON} DNF ($count outdated)" >> "$TMPFILE"
+        echo "Check: dnf list --upgrades" >> "$TMPFILE"
+        echo "Update: sudo dnf upgrade" >> "$TMPFILE"
         echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" >> "$TMPFILE"
         if [ -f "$CACHE_DIR/dnf.list" ]; then
             cat "$CACHE_DIR/dnf.list" >> "$TMPFILE"
@@ -151,6 +165,8 @@ if [ -f "$CACHE_DIR/mise.count" ]; then
     if [ "$count" -gt 0 ]; then
         has_outdated=true
         echo "${MISE_ICON} Mise ($count outdated)" >> "$TMPFILE"
+        echo "Check: mise outdated" >> "$TMPFILE"
+        echo "Update: mise upgrade" >> "$TMPFILE"
         echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" >> "$TMPFILE"
         if [ -f "$CACHE_DIR/mise.list" ]; then
             cat "$CACHE_DIR/mise.list" >> "$TMPFILE"
@@ -167,6 +183,8 @@ if [ -f "$CACHE_DIR/pip.count" ]; then
     if [ "$count" -gt 0 ]; then
         has_outdated=true
         echo "${PIP_ICON} pip ($count outdated)" >> "$TMPFILE"
+        echo "Check: pip3 list --outdated" >> "$TMPFILE"
+        echo "Update: pip3 install --upgrade <package>" >> "$TMPFILE"
         echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" >> "$TMPFILE"
         if [ -f "$CACHE_DIR/pip.list" ]; then
             cat "$CACHE_DIR/pip.list" >> "$TMPFILE"

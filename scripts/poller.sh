@@ -6,6 +6,7 @@ POLL_INTERVAL="${TMUX_OUTDATED_POLL_INTERVAL:-300}"  # Default 5 minutes
 WATCH_INTERVAL=5  # Check file changes every 5 seconds
 CHECK_TIMEOUT=120 # Timeout for each check in seconds
 DEBUG_MODE="${TMUX_OUTDATED_DEBUG:-0}"
+FORCE_UPDATE=0
 LOG_FILE="$CACHE_DIR/poller.log"
 LOCK_FILE="$CACHE_DIR/poller.lock"
 PID_FILE="$CACHE_DIR/poller.pid"
@@ -22,6 +23,11 @@ log_debug() {
 	if [ "$DEBUG_MODE" = "1" ]; then
 		echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >> "$LOG_FILE"
 	fi
+}
+
+handle_sigusr1() {
+	log_debug "Received SIGUSR1, forcing update..."
+	FORCE_UPDATE=1
 }
 
 setup() {
@@ -60,6 +66,12 @@ should_check() {
 	# Always check on first run
 	if [ ! -f "$count_file" ]; then
 		log_debug "$name: First run, checking..."
+		return 0
+	fi
+	
+	# Check for forced update
+	if [ "${FORCE_UPDATE:-0}" -eq 1 ]; then
+		log_debug "$name: Forced update requested"
 		return 0
 	fi
 	
@@ -354,6 +366,7 @@ main() {
 	
 	# Trap cleanup
 	trap cleanup EXIT INT TERM
+	trap handle_sigusr1 SIGUSR1
 	
 	# Initial check
 	run_checks_parallel
@@ -363,6 +376,7 @@ main() {
 		log_debug "Sleeping for ${WATCH_INTERVAL}s..."
 		sleep "$WATCH_INTERVAL"
 		run_checks_parallel
+		FORCE_UPDATE=0
 	done
 }
 
