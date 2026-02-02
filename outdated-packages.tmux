@@ -68,8 +68,11 @@ main() {
 	# Set up mouse binding - click on status-right to show popup
 	tmux bind-key -n MouseDown1StatusRight run-shell "$CURRENT_DIR/scripts/show-popup.sh"
 	
-	# Set up keyboard binding - prefix + u to show popup
-	tmux bind-key u run-shell "$CURRENT_DIR/scripts/show-popup.sh"
+	# Set up keyboard binding - prefix + P to show popup
+	tmux bind-key P run-shell "$CURRENT_DIR/scripts/show-popup.sh"
+
+	# Set up keyboard binding - prefix + u to trigger refresh
+	tmux bind-key u run-shell "$CURRENT_DIR/scripts/trigger-refresh.sh"
 }
 
 main
