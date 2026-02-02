@@ -38,16 +38,18 @@ if [ -f "$CACHE_DIR/brew.count" ]; then
     count=$(cat "$CACHE_DIR/brew.count")
     if [ "$count" -gt 0 ]; then
         has_outdated=true
-        echo "${BREW_ICON} Homebrew ($count outdated)" >> "$TMPFILE"
-        echo "Check: brew outdated --verbose" >> "$TMPFILE"
-        echo "Update: brew upgrade" >> "$TMPFILE"
-        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" >> "$TMPFILE"
-        if [ -f "$CACHE_DIR/brew.list" ]; then
-            cat "$CACHE_DIR/brew.list" >> "$TMPFILE"
-        else
-            echo "Loading..." >> "$TMPFILE"
-        fi
-        echo "" >> "$TMPFILE"
+        {
+            echo "${BREW_ICON} Homebrew ($count outdated)"
+            echo "Check: brew outdated --verbose"
+            echo "Update: brew upgrade"
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            if [ -f "$CACHE_DIR/brew.list" ]; then
+                cat "$CACHE_DIR/brew.list"
+            else
+                echo "Loading..."
+            fi
+            echo ""
+        } >> "$TMPFILE"
     fi
 fi
 
@@ -56,16 +58,18 @@ if [ -f "$CACHE_DIR/npm.count" ]; then
     count=$(cat "$CACHE_DIR/npm.count")
     if [ "$count" -gt 0 ]; then
         has_outdated=true
-        echo "${NPM_ICON} npm global ($count outdated)" >> "$TMPFILE"
-        echo "Check: npm outdated -g" >> "$TMPFILE"
-        echo "Update: npm update -g" >> "$TMPFILE"
-        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" >> "$TMPFILE"
-        if [ -f "$CACHE_DIR/npm.list" ]; then
-            cat "$CACHE_DIR/npm.list" >> "$TMPFILE"
-        else
-            echo "Loading..." >> "$TMPFILE"
-        fi
-        echo "" >> "$TMPFILE"
+        {
+            echo "${NPM_ICON} npm global ($count outdated)"
+            echo "Check: npm outdated -g"
+            echo "Update: npm update -g"
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            if [ -f "$CACHE_DIR/npm.list" ]; then
+                cat "$CACHE_DIR/npm.list"
+            else
+                echo "Loading..."
+            fi
+            echo ""
+        } >> "$TMPFILE"
     fi
 fi
 
@@ -74,16 +78,18 @@ if [ -f "$CACHE_DIR/cargo.count" ]; then
     count=$(cat "$CACHE_DIR/cargo.count")
     if [ "$count" -gt 0 ]; then
         has_outdated=true
-        echo "${CARGO_ICON} Cargo ($count outdated)" >> "$TMPFILE"
-        echo "Check: cargo install-update --list" >> "$TMPFILE"
-        echo "Update: cargo install-update -a" >> "$TMPFILE"
-        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" >> "$TMPFILE"
-        if [ -f "$CACHE_DIR/cargo.list" ]; then
-            cat "$CACHE_DIR/cargo.list" >> "$TMPFILE"
-        else
-            echo "Loading..." >> "$TMPFILE"
-        fi
-        echo "" >> "$TMPFILE"
+        {
+            echo "${CARGO_ICON} Cargo ($count outdated)"
+            echo "Check: cargo install-update --list"
+            echo "Update: cargo install-update -a"
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            if [ -f "$CACHE_DIR/cargo.list" ]; then
+                cat "$CACHE_DIR/cargo.list"
+            else
+                echo "Loading..."
+            fi
+            echo ""
+        } >> "$TMPFILE"
     fi
 fi
 
@@ -92,16 +98,18 @@ if [ -f "$CACHE_DIR/composer.count" ]; then
     count=$(cat "$CACHE_DIR/composer.count")
     if [ "$count" -gt 0 ]; then
         has_outdated=true
-        echo "${COMPOSER_ICON} Composer ($count outdated)" >> "$TMPFILE"
-        echo "Check: composer global outdated" >> "$TMPFILE"
-        echo "Update: composer global update" >> "$TMPFILE"
-        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" >> "$TMPFILE"
-        if [ -f "$CACHE_DIR/composer.list" ]; then
-            cat "$CACHE_DIR/composer.list" >> "$TMPFILE"
-        else
-            echo "Loading..." >> "$TMPFILE"
-        fi
-        echo "" >> "$TMPFILE"
+        {
+            echo "${COMPOSER_ICON} Composer ($count outdated)"
+            echo "Check: composer global outdated"
+            echo "Update: composer global update"
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            if [ -f "$CACHE_DIR/composer.list" ]; then
+                cat "$CACHE_DIR/composer.list"
+            else
+                echo "Loading..."
+            fi
+            echo ""
+        } >> "$TMPFILE"
     fi
 fi
 
@@ -110,16 +118,18 @@ if [ -f "$CACHE_DIR/go.count" ]; then
     count=$(cat "$CACHE_DIR/go.count")
     if [ "$count" -gt 0 ]; then
         has_outdated=true
-        echo "${GO_ICON} Go ($count outdated)" >> "$TMPFILE"
-        echo "Check: go-global-update -n" >> "$TMPFILE"
-        echo "Update: go-global-update" >> "$TMPFILE"
-        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" >> "$TMPFILE"
-        if [ -f "$CACHE_DIR/go.list" ]; then
-            cat "$CACHE_DIR/go.list" >> "$TMPFILE"
-        else
-            echo "Loading..." >> "$TMPFILE"
-        fi
-        echo "" >> "$TMPFILE"
+        {
+            echo "${GO_ICON} Go ($count outdated)"
+            echo "Check: go-global-update -n"
+            echo "Update: go-global-update"
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            if [ -f "$CACHE_DIR/go.list" ]; then
+                cat "$CACHE_DIR/go.list"
+            else
+                echo "Loading..."
+            fi
+            echo ""
+        } >> "$TMPFILE"
     fi
 fi
 
@@ -128,16 +138,18 @@ if [ -f "$CACHE_DIR/apt.count" ]; then
     count=$(cat "$CACHE_DIR/apt.count")
     if [ "$count" -gt 0 ]; then
         has_outdated=true
-        echo "${APT_ICON} Apt ($count outdated)" >> "$TMPFILE"
-        echo "Check: apt list --upgradable" >> "$TMPFILE"
-        echo "Update: sudo apt upgrade" >> "$TMPFILE"
-        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" >> "$TMPFILE"
-        if [ -f "$CACHE_DIR/apt.list" ]; then
-            cat "$CACHE_DIR/apt.list" >> "$TMPFILE"
-        else
-            echo "Loading..." >> "$TMPFILE"
-        fi
-        echo "" >> "$TMPFILE"
+        {
+            echo "${APT_ICON} Apt ($count outdated)"
+            echo "Check: apt list --upgradable"
+            echo "Update: sudo apt upgrade"
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            if [ -f "$CACHE_DIR/apt.list" ]; then
+                cat "$CACHE_DIR/apt.list"
+            else
+                echo "Loading..."
+            fi
+            echo ""
+        } >> "$TMPFILE"
     fi
 fi
 
@@ -146,16 +158,18 @@ if [ -f "$CACHE_DIR/dnf.count" ]; then
     count=$(cat "$CACHE_DIR/dnf.count")
     if [ "$count" -gt 0 ]; then
         has_outdated=true
-        echo "${DNF_ICON} DNF ($count outdated)" >> "$TMPFILE"
-        echo "Check: dnf list --upgrades" >> "$TMPFILE"
-        echo "Update: sudo dnf upgrade" >> "$TMPFILE"
-        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" >> "$TMPFILE"
-        if [ -f "$CACHE_DIR/dnf.list" ]; then
-            cat "$CACHE_DIR/dnf.list" >> "$TMPFILE"
-        else
-            echo "Loading..." >> "$TMPFILE"
-        fi
-        echo "" >> "$TMPFILE"
+        {
+            echo "${DNF_ICON} DNF ($count outdated)"
+            echo "Check: dnf list --upgrades"
+            echo "Update: sudo dnf upgrade"
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            if [ -f "$CACHE_DIR/dnf.list" ]; then
+                cat "$CACHE_DIR/dnf.list"
+            else
+                echo "Loading..."
+            fi
+            echo ""
+        } >> "$TMPFILE"
     fi
 fi
 
@@ -164,16 +178,18 @@ if [ -f "$CACHE_DIR/mise.count" ]; then
     count=$(cat "$CACHE_DIR/mise.count")
     if [ "$count" -gt 0 ]; then
         has_outdated=true
-        echo "${MISE_ICON} Mise ($count outdated)" >> "$TMPFILE"
-        echo "Check: mise outdated" >> "$TMPFILE"
-        echo "Update: mise upgrade" >> "$TMPFILE"
-        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" >> "$TMPFILE"
-        if [ -f "$CACHE_DIR/mise.list" ]; then
-            cat "$CACHE_DIR/mise.list" >> "$TMPFILE"
-        else
-            echo "Loading..." >> "$TMPFILE"
-        fi
-        echo "" >> "$TMPFILE"
+        {
+            echo "${MISE_ICON} Mise ($count outdated)"
+            echo "Check: mise outdated"
+            echo "Update: mise upgrade"
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            if [ -f "$CACHE_DIR/mise.list" ]; then
+                cat "$CACHE_DIR/mise.list"
+            else
+                echo "Loading..."
+            fi
+            echo ""
+        } >> "$TMPFILE"
     fi
 fi
 
@@ -182,16 +198,18 @@ if [ -f "$CACHE_DIR/pip.count" ]; then
     count=$(cat "$CACHE_DIR/pip.count")
     if [ "$count" -gt 0 ]; then
         has_outdated=true
-        echo "${PIP_ICON} pip ($count outdated)" >> "$TMPFILE"
-        echo "Check: pip3 list --outdated" >> "$TMPFILE"
-        echo "Update: pip3 install --upgrade <package>" >> "$TMPFILE"
-        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" >> "$TMPFILE"
-        if [ -f "$CACHE_DIR/pip.list" ]; then
-            cat "$CACHE_DIR/pip.list" >> "$TMPFILE"
-        else
-            echo "Loading..." >> "$TMPFILE"
-        fi
-        echo "" >> "$TMPFILE"
+        {
+            echo "${PIP_ICON} pip ($count outdated)"
+            echo "Check: pip3 list --outdated"
+            echo "Update: pip3 install --upgrade <package>"
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            if [ -f "$CACHE_DIR/pip.list" ]; then
+                cat "$CACHE_DIR/pip.list"
+            else
+                echo "Loading..."
+            fi
+            echo ""
+        } >> "$TMPFILE"
     fi
 fi
 
