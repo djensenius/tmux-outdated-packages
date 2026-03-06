@@ -65,14 +65,35 @@ main() {
 	# Start the background poller
 	start_poller
 	
-	# Set up mouse binding - click on status-right to show popup
-	tmux bind-key -n MouseDown1StatusRight run-shell "$CURRENT_DIR/scripts/show-popup.sh"
-	
-	# Set up keyboard binding - prefix + P to show popup
-	tmux bind-key P run-shell "$CURRENT_DIR/scripts/show-popup.sh"
+	# Configurable keybindings
+	local popup_key
+	popup_key=$(get_tmux_option "@outdated_popup_key" "P")
+	local refresh_key
+	refresh_key=$(get_tmux_option "@outdated_refresh_key" "u")
+	local mouse_click
+	mouse_click=$(get_tmux_option "@outdated_mouse_click" "on")
+	local update_key
+	update_key=$(get_tmux_option "@outdated_update_key" "")
 
-	# Set up keyboard binding - prefix + u to trigger refresh
-	tmux bind-key u run-shell "$CURRENT_DIR/scripts/trigger-refresh.sh"
+	# Mouse binding
+	if [ "$mouse_click" = "on" ]; then
+		tmux bind-key -n MouseDown1StatusRight run-shell "$CURRENT_DIR/scripts/show-popup.sh"
+	fi
+
+	# Popup key
+	if [ -n "$popup_key" ]; then
+		tmux bind-key "$popup_key" run-shell "$CURRENT_DIR/scripts/show-popup.sh"
+	fi
+
+	# Refresh key
+	if [ -n "$refresh_key" ]; then
+		tmux bind-key "$refresh_key" run-shell "$CURRENT_DIR/scripts/trigger-refresh.sh"
+	fi
+
+	# Update key (interactive update selector)
+	if [ -n "$update_key" ]; then
+		tmux bind-key "$update_key" display-popup -E -w 80% -h 80% "$CURRENT_DIR/scripts/update-packages.sh"
+	fi
 }
 
 main

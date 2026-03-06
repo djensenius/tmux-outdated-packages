@@ -7,16 +7,27 @@ CURRENT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 # shellcheck disable=SC1091
 source "$CURRENT_DIR/icons.sh"
 
+# ANSI colour codes
+BOLD='\033[1m'
+DIM='\033[2m'
+RED='\033[31m'
+GREEN='\033[32m'
+YELLOW='\033[33m'
+BLUE='\033[34m'
+MAGENTA='\033[35m'
+CYAN='\033[36m'
+RESET='\033[0m'
+
 # Build a temporary file with the content
 TMPFILE=$(mktemp)
 
 # Header
-cat > "$TMPFILE" << 'HEADER'
-╔══════════════════════════════════════════════════════════╗
-║                    📦 Outdated Packages                  ║
-╚══════════════════════════════════════════════════════════╝
-
-HEADER
+{
+    echo -e "${BOLD}${CYAN}╔══════════════════════════════════════════════════════════╗${RESET}"
+    echo -e "${BOLD}${CYAN}║${RESET}                    📦 ${BOLD}Outdated Packages${RESET}                  ${BOLD}${CYAN}║${RESET}"
+    echo -e "${BOLD}${CYAN}╚══════════════════════════════════════════════════════════╝${RESET}"
+    echo ""
+} > "$TMPFILE"
 
 has_outdated=false
 is_loading=false
@@ -24,204 +35,59 @@ is_loading=false
 # Check if we're currently checking for updates
 if [ -f "$CACHE_DIR/checking" ]; then
     is_loading=true
-    cat >> "$TMPFILE" << 'LOADING'
-⏳ Checking for outdated packages...
-
-This may take a few minutes. The display will update when complete.
-
-LOADING
+    {
+        echo -e "${YELLOW}${BOLD}⏳ Checking for outdated packages...${RESET}"
+        echo ""
+        echo -e "${DIM}This may take a few minutes. The display will update when complete.${RESET}"
+        echo ""
+    } >> "$TMPFILE"
 fi
 
-# Show cached counts and package lists from cache files
-# Check Homebrew
-if [ -f "$CACHE_DIR/brew.count" ]; then
-    count=$(cat "$CACHE_DIR/brew.count")
-    if [ "$count" -gt 0 ]; then
-        has_outdated=true
-        {
-            echo "${BREW_ICON} Homebrew ($count outdated)"
-            echo "Check: brew outdated --verbose"
-            echo "Update: brew upgrade"
-            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-            if [ -f "$CACHE_DIR/brew.list" ]; then
-                cat "$CACHE_DIR/brew.list"
-            else
-                echo "Loading..."
-            fi
-            echo ""
-        } >> "$TMPFILE"
+# Helper to render a package manager section
+render_section() {
+    local icon="$1" name="$2" count_file="$3" list_file="$4"
+    local check_cmd="$5" update_cmd="$6" colour="$7"
+
+    if [ -f "$CACHE_DIR/$count_file" ]; then
+        local count
+        count=$(cat "$CACHE_DIR/$count_file")
+        if [ "$count" -gt 0 ]; then
+            has_outdated=true
+            {
+                echo -e "${colour}${BOLD}${icon} ${name}${RESET} ${YELLOW}(${count} outdated)${RESET}"
+                echo -e "${DIM}Check:  ${check_cmd}${RESET}"
+                echo -e "${DIM}Update: ${update_cmd}${RESET}"
+                echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+                if [ -f "$CACHE_DIR/$list_file" ]; then
+                    cat "$CACHE_DIR/$list_file"
+                else
+                    echo -e "${DIM}Loading...${RESET}"
+                fi
+                echo ""
+            } >> "$TMPFILE"
+        fi
     fi
-fi
+}
 
-# Check npm
-if [ -f "$CACHE_DIR/npm.count" ]; then
-    count=$(cat "$CACHE_DIR/npm.count")
-    if [ "$count" -gt 0 ]; then
-        has_outdated=true
-        {
-            echo "${NPM_ICON} npm global ($count outdated)"
-            echo "Check: npm outdated -g"
-            echo "Update: npm update -g"
-            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-            if [ -f "$CACHE_DIR/npm.list" ]; then
-                cat "$CACHE_DIR/npm.list"
-            else
-                echo "Loading..."
-            fi
-            echo ""
-        } >> "$TMPFILE"
-    fi
-fi
-
-# Check cargo
-if [ -f "$CACHE_DIR/cargo.count" ]; then
-    count=$(cat "$CACHE_DIR/cargo.count")
-    if [ "$count" -gt 0 ]; then
-        has_outdated=true
-        {
-            echo "${CARGO_ICON} Cargo ($count outdated)"
-            echo "Check: cargo install-update --list"
-            echo "Update: cargo install-update -a"
-            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-            if [ -f "$CACHE_DIR/cargo.list" ]; then
-                cat "$CACHE_DIR/cargo.list"
-            else
-                echo "Loading..."
-            fi
-            echo ""
-        } >> "$TMPFILE"
-    fi
-fi
-
-# Check composer
-if [ -f "$CACHE_DIR/composer.count" ]; then
-    count=$(cat "$CACHE_DIR/composer.count")
-    if [ "$count" -gt 0 ]; then
-        has_outdated=true
-        {
-            echo "${COMPOSER_ICON} Composer ($count outdated)"
-            echo "Check: composer global outdated"
-            echo "Update: composer global update"
-            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-            if [ -f "$CACHE_DIR/composer.list" ]; then
-                cat "$CACHE_DIR/composer.list"
-            else
-                echo "Loading..."
-            fi
-            echo ""
-        } >> "$TMPFILE"
-    fi
-fi
-
-# Check go
-if [ -f "$CACHE_DIR/go.count" ]; then
-    count=$(cat "$CACHE_DIR/go.count")
-    if [ "$count" -gt 0 ]; then
-        has_outdated=true
-        {
-            echo "${GO_ICON} Go ($count outdated)"
-            echo "Check: go-global-update -n"
-            echo "Update: go-global-update"
-            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-            if [ -f "$CACHE_DIR/go.list" ]; then
-                cat "$CACHE_DIR/go.list"
-            else
-                echo "Loading..."
-            fi
-            echo ""
-        } >> "$TMPFILE"
-    fi
-fi
-
-# Check apt
-if [ -f "$CACHE_DIR/apt.count" ]; then
-    count=$(cat "$CACHE_DIR/apt.count")
-    if [ "$count" -gt 0 ]; then
-        has_outdated=true
-        {
-            echo "${APT_ICON} Apt ($count outdated)"
-            echo "Check: apt list --upgradable"
-            echo "Update: sudo apt upgrade"
-            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-            if [ -f "$CACHE_DIR/apt.list" ]; then
-                cat "$CACHE_DIR/apt.list"
-            else
-                echo "Loading..."
-            fi
-            echo ""
-        } >> "$TMPFILE"
-    fi
-fi
-
-# Check dnf
-if [ -f "$CACHE_DIR/dnf.count" ]; then
-    count=$(cat "$CACHE_DIR/dnf.count")
-    if [ "$count" -gt 0 ]; then
-        has_outdated=true
-        {
-            echo "${DNF_ICON} DNF ($count outdated)"
-            echo "Check: dnf list --upgrades"
-            echo "Update: sudo dnf upgrade"
-            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-            if [ -f "$CACHE_DIR/dnf.list" ]; then
-                cat "$CACHE_DIR/dnf.list"
-            else
-                echo "Loading..."
-            fi
-            echo ""
-        } >> "$TMPFILE"
-    fi
-fi
-
-# Check mise
-if [ -f "$CACHE_DIR/mise.count" ]; then
-    count=$(cat "$CACHE_DIR/mise.count")
-    if [ "$count" -gt 0 ]; then
-        has_outdated=true
-        {
-            echo "${MISE_ICON} Mise ($count outdated)"
-            echo "Check: mise outdated"
-            echo "Update: mise upgrade"
-            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-            if [ -f "$CACHE_DIR/mise.list" ]; then
-                cat "$CACHE_DIR/mise.list"
-            else
-                echo "Loading..."
-            fi
-            echo ""
-        } >> "$TMPFILE"
-    fi
-fi
-
-# Check pip
-if [ -f "$CACHE_DIR/pip.count" ]; then
-    count=$(cat "$CACHE_DIR/pip.count")
-    if [ "$count" -gt 0 ]; then
-        has_outdated=true
-        {
-            echo "${PIP_ICON} pip ($count outdated)"
-            echo "Check: pip3 list --outdated"
-            echo "Update: pip3 install --upgrade <package>"
-            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-            if [ -f "$CACHE_DIR/pip.list" ]; then
-                cat "$CACHE_DIR/pip.list"
-            else
-                echo "Loading..."
-            fi
-            echo ""
-        } >> "$TMPFILE"
-    fi
-fi
+render_section "$BREW_ICON"     "Homebrew" "brew.count"     "brew.list"     "brew outdated --verbose"    "brew upgrade"          "$GREEN"
+render_section "$NPM_ICON"      "npm global" "npm.count"    "npm.list"      "npm outdated -g"            "npm update -g"         "$RED"
+render_section "$CARGO_ICON"    "Cargo"    "cargo.count"    "cargo.list"    "cargo install-update --list" "cargo install-update -a" "$YELLOW"
+render_section "$COMPOSER_ICON" "Composer" "composer.count" "composer.list" "composer global outdated"    "composer global update" "$MAGENTA"
+render_section "$GO_ICON"       "Go"       "go.count"       "go.list"       "go-global-update -n"        "go-global-update"      "$CYAN"
+render_section "$APT_ICON"      "Apt"      "apt.count"      "apt.list"      "apt list --upgradable"      "sudo apt upgrade"      "$GREEN"
+render_section "$DNF_ICON"      "DNF"      "dnf.count"      "dnf.list"      "dnf list --upgrades"        "sudo dnf upgrade"      "$BLUE"
+render_section "$MISE_ICON"     "Mise"     "mise.count"     "mise.list"     "mise outdated"              "mise upgrade"          "$MAGENTA"
+render_section "$PIP_ICON"      "pip"      "pip.count"      "pip.list"      "pip3 list --outdated"       "pip3 install --upgrade <package>" "$BLUE"
 
 if [ "$has_outdated" = false ] && [ "$is_loading" = false ]; then
-    echo "✨ All packages are up to date!" >> "$TMPFILE"
+    echo -e "${GREEN}${BOLD}✨ All packages are up to date!${RESET}" >> "$TMPFILE"
 fi
 
 {
     echo ""
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "Press q or ESC to close  |  Use ↑↓ or j/k to scroll"
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+    echo -e "${DIM}Press q or ESC to close  |  Use ↑↓ or j/k to scroll${RESET}"
 } >> "$TMPFILE"
 
 # Show in tmux popup with less
-tmux display-popup -E -w 90% -h 90% "less -r $TMPFILE; rm -f $TMPFILE"
+tmux display-popup -E -w 90% -h 90% "less -R $TMPFILE; rm -f $TMPFILE"

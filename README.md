@@ -131,12 +131,50 @@ The plugin works with any tmux theme or configuration!
 ### Interactive Popup
 
 View detailed list of outdated packages:
-- **Mouse**: Click on the status bar (right side)
-- **Keyboard**: `prefix + u`
+- **Mouse**: Click on the status bar (right side) — configurable with `@outdated_mouse_click`
+- **Keyboard**: `prefix + P` (default) — configurable with `@outdated_popup_key`
 
 The popup shows:
-- Full list of outdated packages per manager
+- Full list of outdated packages per manager with colour-coded output
 - Loading indicator while checking
+
+### Manual Refresh
+
+Trigger an immediate re-check of all package managers:
+- **Keyboard**: `prefix + u` (default) — configurable with `@outdated_refresh_key`
+
+### Interactive Update
+
+Open a selection menu to update outdated packages directly:
+- **Keyboard**: Disabled by default — set `@outdated_update_key` to enable (e.g., `U`)
+- Select a single package manager or update all sequentially
+- Runs in a live shell so you can interact with prompts
+
+### Keybinding Configuration
+
+All keybindings are configurable. Set these in your `tmux.conf`:
+
+```tmux
+# Popup detail view (default: P)
+set -g @outdated_popup_key 'P'
+
+# Trigger manual refresh (default: u)
+set -g @outdated_refresh_key 'u'
+
+# Mouse click on status-right for popup (default: on)
+set -g @outdated_mouse_click 'on'
+
+# Interactive update selector (default: disabled)
+# Set a key to enable, e.g.:
+set -g @outdated_update_key 'U'
+```
+
+To disable a keybinding entirely, set it to an empty string:
+```tmux
+set -g @outdated_popup_key ''
+set -g @outdated_refresh_key ''
+set -g @outdated_mouse_click 'off'
+```
 
 ## Requirements
 
