@@ -16,17 +16,18 @@ YELLOW='\033[33m'
 BLUE='\033[34m'
 MAGENTA='\033[35m'
 CYAN='\033[36m'
-WHITE='\033[37m'
 RESET='\033[0m'
 
 # Build a temporary file with the content
 TMPFILE=$(mktemp)
 
 # Header
-echo -e "${BOLD}${CYAN}╔══════════════════════════════════════════════════════════╗${RESET}" > "$TMPFILE"
-echo -e "${BOLD}${CYAN}║${RESET}                    📦 ${BOLD}Outdated Packages${RESET}                  ${BOLD}${CYAN}║${RESET}" >> "$TMPFILE"
-echo -e "${BOLD}${CYAN}╚══════════════════════════════════════════════════════════╝${RESET}" >> "$TMPFILE"
-echo "" >> "$TMPFILE"
+{
+    echo -e "${BOLD}${CYAN}╔══════════════════════════════════════════════════════════╗${RESET}"
+    echo -e "${BOLD}${CYAN}║${RESET}                    📦 ${BOLD}Outdated Packages${RESET}                  ${BOLD}${CYAN}║${RESET}"
+    echo -e "${BOLD}${CYAN}╚══════════════════════════════════════════════════════════╝${RESET}"
+    echo ""
+} > "$TMPFILE"
 
 has_outdated=false
 is_loading=false
@@ -34,10 +35,12 @@ is_loading=false
 # Check if we're currently checking for updates
 if [ -f "$CACHE_DIR/checking" ]; then
     is_loading=true
-    echo -e "${YELLOW}${BOLD}⏳ Checking for outdated packages...${RESET}" >> "$TMPFILE"
-    echo "" >> "$TMPFILE"
-    echo -e "${DIM}This may take a few minutes. The display will update when complete.${RESET}" >> "$TMPFILE"
-    echo "" >> "$TMPFILE"
+    {
+        echo -e "${YELLOW}${BOLD}⏳ Checking for outdated packages...${RESET}"
+        echo ""
+        echo -e "${DIM}This may take a few minutes. The display will update when complete.${RESET}"
+        echo ""
+    } >> "$TMPFILE"
 fi
 
 # Helper to render a package manager section
