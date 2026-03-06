@@ -8,24 +8,24 @@ CURRENT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 source "$CURRENT_DIR/icons.sh"
 
 # ANSI colour codes
-BOLD='\033[1m'
-DIM='\033[2m'
-RED='\033[31m'
-GREEN='\033[32m'
-YELLOW='\033[33m'
-BLUE='\033[34m'
-MAGENTA='\033[35m'
-CYAN='\033[36m'
-RESET='\033[0m'
+BOLD=$'\033[1m'
+DIM=$'\033[2m'
+RED=$'\033[31m'
+GREEN=$'\033[32m'
+YELLOW=$'\033[33m'
+BLUE=$'\033[34m'
+MAGENTA=$'\033[35m'
+CYAN=$'\033[36m'
+RESET=$'\033[0m'
 
 # Build a temporary file with the content
 TMPFILE=$(mktemp)
 
 # Header
 {
-    echo -e "${BOLD}${CYAN}╔══════════════════════════════════════════════════════════╗${RESET}"
-    echo -e "${BOLD}${CYAN}║${RESET}                    📦 ${BOLD}Outdated Packages${RESET}                  ${BOLD}${CYAN}║${RESET}"
-    echo -e "${BOLD}${CYAN}╚══════════════════════════════════════════════════════════╝${RESET}"
+    echo "${BOLD}${CYAN}╔══════════════════════════════════════════════════════════╗${RESET}"
+    echo "${BOLD}${CYAN}║${RESET}                    📦 ${BOLD}Outdated Packages${RESET}                  ${BOLD}${CYAN}║${RESET}"
+    echo "${BOLD}${CYAN}╚══════════════════════════════════════════════════════════╝${RESET}"
     echo ""
 } > "$TMPFILE"
 
@@ -36,9 +36,9 @@ is_loading=false
 if [ -f "$CACHE_DIR/checking" ]; then
     is_loading=true
     {
-        echo -e "${YELLOW}${BOLD}⏳ Checking for outdated packages...${RESET}"
+        echo "${YELLOW}${BOLD}⏳ Checking for outdated packages...${RESET}"
         echo ""
-        echo -e "${DIM}This may take a few minutes. The display will update when complete.${RESET}"
+        echo "${DIM}This may take a few minutes. The display will update when complete.${RESET}"
         echo ""
     } >> "$TMPFILE"
 fi
@@ -54,14 +54,14 @@ render_section() {
         if [ "$count" -gt 0 ]; then
             has_outdated=true
             {
-                echo -e "${colour}${BOLD}${icon} ${name}${RESET} ${YELLOW}(${count} outdated)${RESET}"
-                echo -e "${DIM}Check:  ${check_cmd}${RESET}"
-                echo -e "${DIM}Update: ${update_cmd}${RESET}"
-                echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+                echo "${colour}${BOLD}${icon} ${name}${RESET} ${YELLOW}(${count} outdated)${RESET}"
+                echo "${DIM}Check:  ${check_cmd}${RESET}"
+                echo "${DIM}Update: ${update_cmd}${RESET}"
+                echo "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
                 if [ -f "$CACHE_DIR/$list_file" ]; then
                     cat "$CACHE_DIR/$list_file"
                 else
-                    echo -e "${DIM}Loading...${RESET}"
+                    echo "${DIM}Loading...${RESET}"
                 fi
                 echo ""
             } >> "$TMPFILE"
@@ -80,14 +80,14 @@ render_section "$MISE_ICON"     "Mise"     "mise.count"     "mise.list"     "mis
 render_section "$PIP_ICON"      "pip"      "pip.count"      "pip.list"      "pip3 list --outdated"       "pip3 install --upgrade <package>" "$BLUE"
 
 if [ "$has_outdated" = false ] && [ "$is_loading" = false ]; then
-    echo -e "${GREEN}${BOLD}✨ All packages are up to date!${RESET}" >> "$TMPFILE"
+    echo "${GREEN}${BOLD}✨ All packages are up to date!${RESET}" >> "$TMPFILE"
 fi
 
 {
     echo ""
-    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
-    echo -e "${DIM}Press q or ESC to close  |  Use ↑↓ or j/k to scroll${RESET}"
+    echo "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+    echo "${DIM}Press q or ESC to close  |  Use ↑↓ or j/k to scroll${RESET}"
 } >> "$TMPFILE"
 
-# Show in tmux popup with less
-tmux display-popup -E -w 90% -h 90% "less -R $TMPFILE; rm -f $TMPFILE"
+# Show in tmux popup with less (-R for colours, -U to not escape PUA/nerd font icons)
+tmux display-popup -E -w 90% -h 90% "less -RU $TMPFILE; rm -f $TMPFILE"
