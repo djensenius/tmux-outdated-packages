@@ -10,15 +10,36 @@ RED=$'\033[31m'
 GREEN=$'\033[32m'
 YELLOW=$'\033[33m'
 CYAN=$'\033[36m'
-RESET='\033[0m'
+RESET=$'\033[0m'
+
+# Upgrade all outdated pip packages by parsing the cached list
+pip_upgrade_all() {
+    local list_file="$CACHE_DIR/pip.list"
+    if [ ! -f "$list_file" ]; then
+        echo "No pip package list found"
+        return 1
+    fi
+    # Skip the header lines (Package/Version/Latest/Type and dashes)
+    local packages
+    packages=$(awk 'NR > 2 { print $1 }' "$list_file")
+    if [ -z "$packages" ]; then
+        echo "No packages to upgrade"
+        return 0
+    fi
+    echo "$packages" | while IFS= read -r pkg; do
+        echo "${BOLD}Upgrading ${pkg}...${RESET}"
+        pip3 install --upgrade "$pkg"
+    done
+}
 
 # Collect outdated managers into arrays
 declare -a manager_names=()
 declare -a manager_counts=()
 declare -a manager_commands=()
+declare -a manager_lists=()
 
 check_manager() {
-    local name="$1" count_file="$2" command="$3"
+    local name="$1" count_file="$2" command="$3" list_file="$4"
     if [ -f "$CACHE_DIR/$count_file" ]; then
         local count
         count=$(cat "$CACHE_DIR/$count_file")
@@ -26,19 +47,20 @@ check_manager() {
             manager_names+=("$name")
             manager_counts+=("$count")
             manager_commands+=("$command")
+            manager_lists+=("$list_file")
         fi
     fi
 }
 
-check_manager "Homebrew"  "brew.count"     "brew upgrade"
-check_manager "npm"       "npm.count"      "npm update -g"
-check_manager "Cargo"     "cargo.count"    "cargo install-update -a"
-check_manager "Composer"  "composer.count"  "composer global update"
-check_manager "Go"        "go.count"       "go-global-update"
-check_manager "apt"       "apt.count"      "sudo apt upgrade"
-check_manager "DNF"       "dnf.count"      "sudo dnf upgrade"
-check_manager "Mise"      "mise.count"     "mise upgrade"
-check_manager "pip"       "pip.count"      "echo 'Run: pip3 install --upgrade <package> for each package'"
+check_manager "Homebrew"  "brew.count"     "brew upgrade"             "brew.list"
+check_manager "npm"       "npm.count"      "npm update -g"            "npm.list"
+check_manager "Cargo"     "cargo.count"    "cargo install-update -a"  "cargo.list"
+check_manager "Composer"  "composer.count"  "composer global update"  "composer.list"
+check_manager "Go"        "go.count"       "go-global-update"         "go.list"
+check_manager "apt"       "apt.count"      "sudo apt upgrade"         "apt.list"
+check_manager "DNF"       "dnf.count"      "sudo dnf upgrade"         "dnf.list"
+check_manager "Mise"      "mise.count"     "mise upgrade"             "mise.list"
+check_manager "pip"       "pip.count"      "pip_upgrade_all"          "pip.list"
 
 total=${#manager_names[@]}
 
@@ -59,6 +81,11 @@ while true; do
         local_count="${manager_counts[$i]}"
         echo "  ${YELLOW}$((i + 1)))${RESET} ${BOLD}${manager_names[$i]}${RESET} ${DIM}(${local_count} outdated)${RESET}"
         echo "     ${DIM}${manager_commands[$i]}${RESET}"
+        if [ -f "$CACHE_DIR/${manager_lists[$i]}" ]; then
+            while IFS= read -r pkg; do
+                echo "     ${DIM}  • ${pkg}${RESET}"
+            done < "$CACHE_DIR/${manager_lists[$i]}"
+        fi
         echo ""
     done
 
