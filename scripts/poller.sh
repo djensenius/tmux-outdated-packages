@@ -91,8 +91,8 @@ should_check() {
 	read -ra dirs <<< "$dirs_str"
 	
 	if [ ${#dirs[@]} -eq 0 ]; then
-		log_debug "$name: No directory to monitor, checking on interval"
-		return 0
+		log_debug "$name: No directory to monitor, relying on poll interval, skipping"
+		return 1
 	fi
 	
 	local changed=0
