@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [ "main", "master" ]
+    branches: ["main", "master"]
   pull_request:
-    branches: [ "main", "master" ]
+    branches: ["main", "master"]
 
 jobs:
   shellcheck:
@@ -15,4 +15,14 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Run ShellCheck
-        run: shellcheck scripts/*.sh outdated-packages.tmux
+        run: shellcheck scripts/*.sh tests/*.sh outdated-packages.tmux
+
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Test atomic poller lock
+        run: tests/poller-lock-test.sh

@@ -21,21 +21,8 @@ set_tmux_option() {
 }
 
 start_poller() {
-	# Start background poller if not already running
-	local cache_dir="${TMPDIR:-/tmp}/tmux-outdated-packages"
-	local pid_file="$cache_dir/poller.pid"
-	
-	# Check if poller is already running
-	if [ -f "$pid_file" ]; then
-		local pid
-		pid=$(cat "$pid_file")
-		if kill -0 "$pid" 2>/dev/null; then
-			return 0
-		fi
-	fi
-	
-	# Start poller in background
-	mkdir -p "$cache_dir"
+	# The poller owns the atomic startup lock, so every launcher uses the same
+	# race-free path.
 	"$CURRENT_DIR/scripts/poller.sh" &
 	disown
 }

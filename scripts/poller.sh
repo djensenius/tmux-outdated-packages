@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 
+POLLER_COMMAND_PATH="tmux-outdated-packages/scripts/$(basename -- "${BASH_SOURCE[0]}")"
 CACHE_DIR="${TMPDIR:-/tmp}/tmux-outdated-packages"
 export PATH="$PATH:/opt/homebrew/bin:/usr/local/bin"
 POLL_INTERVAL="${TMUX_OUTDATED_POLL_INTERVAL:-300}"  # Default 5 minutes
@@ -7,9 +8,13 @@ WATCH_INTERVAL=5  # Check file changes every 5 seconds
 CHECK_TIMEOUT=120 # Timeout for each check in seconds
 DEBUG_MODE="${TMUX_OUTDATED_DEBUG:-0}"
 FORCE_UPDATE=0
+CURRENT_FORCE_UPDATE=0
 LOG_FILE="$CACHE_DIR/poller.log"
-LOCK_FILE="$CACHE_DIR/poller.lock"
+LOCK_DIR="$CACHE_DIR/poller.lock"
+LOCK_OWNER_FILE="$LOCK_DIR/pid"
 PID_FILE="$CACHE_DIR/poller.pid"
+CHECKING_FILE="$CACHE_DIR/checking"
+COMPLETE_FILE="$CACHE_DIR/complete"
 
 # Package install directories for quick change detection
 BREW_CELLAR="${HOMEBREW_PREFIX:-/usr/local}/Cellar"
@@ -23,6 +28,59 @@ log_debug() {
 	if [ "$DEBUG_MODE" = "1" ]; then
 		echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >> "$LOG_FILE"
 	fi
+}
+
+poller_process_is_running() {
+	local pid=$1
+	local process_command
+	case "$pid" in
+		'' | *[!0-9]*) return 1 ;;
+	esac
+	kill -0 "$pid" 2>/dev/null || return 1
+	process_command=$(ps -ww -p "$pid" -o command= 2>/dev/null) || return 1
+	case "$process_command" in
+		*"$POLLER_COMMAND_PATH"*) return 0 ;;
+		*) return 1 ;;
+	esac
+}
+
+acquire_lock() {
+	local attempts=0 owner
+	while [ "$attempts" -lt 50 ]; do
+		if mkdir "$LOCK_DIR" 2>/dev/null; then
+			if printf '%s\n' "$$" > "$LOCK_OWNER_FILE"; then
+				return 0
+			fi
+			rmdir "$LOCK_DIR" 2>/dev/null || true
+			return 1
+		fi
+
+		owner=$(awk 'NR == 1 && /^[0-9]+$/ { print; exit }' "$LOCK_OWNER_FILE" 2>/dev/null)
+		if [ -n "$owner" ] && poller_process_is_running "$owner"; then
+			return 1
+		fi
+
+		# Give a new owner time to publish its PID before treating an empty
+		# directory as a stale lock.
+		if [ -n "$owner" ] || [ "$attempts" -ge 10 ]; then
+			rm -f "$LOCK_OWNER_FILE"
+			rmdir "$LOCK_DIR" 2>/dev/null || true
+			if [ -e "$LOCK_DIR" ] && [ ! -d "$LOCK_DIR" ]; then
+				rm -f "$LOCK_DIR"
+			fi
+		fi
+		attempts=$((attempts + 1))
+		sleep 0.1
+	done
+	return 1
+}
+
+release_lock() {
+	local owner
+	owner=$(awk 'NR == 1 && /^[0-9]+$/ { print; exit }' "$LOCK_OWNER_FILE" 2>/dev/null)
+	[ "$owner" = "$$" ] || return 0
+	rm -f "$LOCK_OWNER_FILE"
+	rmdir "$LOCK_DIR" 2>/dev/null || true
 }
 
 handle_sigusr1() {
@@ -42,8 +100,8 @@ setup() {
 check_if_running() {
 	if [ -f "$PID_FILE" ]; then
 		local pid
-		pid=$(cat "$PID_FILE")
-		if kill -0 "$pid" 2>/dev/null; then
+		pid=$(awk 'NR == 1 && /^[0-9]+$/ { print; exit }' "$PID_FILE")
+		if [ "$pid" != "$$" ] && poller_process_is_running "$pid"; then
 			return 0
 		fi
 	fi
@@ -70,7 +128,7 @@ should_check() {
 	fi
 	
 	# Check for forced update
-	if [ "${FORCE_UPDATE:-0}" -eq 1 ]; then
+	if [ "${CURRENT_FORCE_UPDATE:-0}" -eq 1 ]; then
 		log_debug "$name: Forced update requested"
 		return 0
 	fi
@@ -325,21 +383,31 @@ check_mise() {
 run_checks_parallel() {
 	log_debug "--- Starting check cycle ---"
 	local cycle_start
+	local pid
+	local pids=()
 	cycle_start=$(date +%s)
+	: > "$CHECKING_FILE"
 	
 	# Run all checks in parallel background jobs
-	check_brew &
-	check_npm &
-	check_pip &
-	check_cargo &
-	check_composer &
-	check_go &
-	check_apt &
-	check_dnf &
-	check_mise &
+	check_brew & pids+=("$!")
+	check_npm & pids+=("$!")
+	check_pip & pids+=("$!")
+	check_cargo & pids+=("$!")
+	check_composer & pids+=("$!")
+	check_go & pids+=("$!")
+	check_apt & pids+=("$!")
+	check_dnf & pids+=("$!")
+	check_mise & pids+=("$!")
 	
-	# Wait for all background jobs to complete
-	wait
+	# A trapped refresh signal interrupts wait. Retry while the child still
+	# exists so completion is not published before every check has finished.
+	for pid in "${pids[@]}"; do
+		while ! wait "$pid" 2>/dev/null; do
+			kill -0 "$pid" 2>/dev/null || break
+		done
+	done
+	rm -f "$CHECKING_FILE"
+	touch "$COMPLETE_FILE"
 	
 	local cycle_duration=$(($(date +%s) - cycle_start))
 	log_debug "--- Check cycle complete (took ${cycle_duration}s) ---"
@@ -347,16 +415,26 @@ run_checks_parallel() {
 
 cleanup() {
 	log_debug "=== Poller stopped ==="
-	rm -f "$LOCK_FILE" "$PID_FILE"
+	if [ "$(awk 'NR == 1 { print; exit }' "$PID_FILE" 2>/dev/null)" = "$$" ]; then
+		rm -f "$PID_FILE"
+	fi
+	rm -f "$CHECKING_FILE"
+	release_lock
 	exit 0
 }
 
 main() {
 	setup
+
+	if ! acquire_lock; then
+		log_debug "Poller lock is already held, exiting"
+		exit 0
+	fi
 	
 	# Check if already running
 	if check_if_running; then
 		log_debug "Poller already running, exiting"
+		release_lock
 		exit 0
 	fi
 	
@@ -375,9 +453,12 @@ main() {
 	while true; do
 		log_debug "Sleeping for ${WATCH_INTERVAL}s..."
 		sleep "$WATCH_INTERVAL"
-		run_checks_parallel
+		CURRENT_FORCE_UPDATE=$FORCE_UPDATE
 		FORCE_UPDATE=0
+		run_checks_parallel
 	done
 }
 
-main
+if [ "${BASH_SOURCE[0]}" = "$0" ]; then
+	main
+fi
