@@ -38,7 +38,8 @@ while [ ! -f "$CACHE_DIR/test.ready" ] && [ "$attempts" -lt 50 ]; do
 done
 
 [ -f "$CACHE_DIR/test.ready" ]
-[ "$(cat "$CACHE_DIR/poller.lock/pid")" = "$owner_pid" ]
+[ "$(awk 'NR == 1 { print; exit }' "$CACHE_DIR/poller.lock/pid")" = "$owner_pid" ]
+[ -n "$(awk 'NR == 2 {$1 = $1; print; exit}' "$CACHE_DIR/poller.lock/pid")" ]
 
 if bash -c 'source "$1"; setup; acquire_lock' _ "$POLLER"; then
 	printf 'a second poller acquired the live lock\n' >&2
@@ -53,7 +54,7 @@ bash -c '
 	source "$1"
 	setup
 	acquire_lock
-	[ "$(cat "$LOCK_OWNER_FILE")" = "$$" ]
+	[ "$(awk "NR == 1 { print; exit }" "$LOCK_OWNER_FILE")" = "$$" ]
 	release_lock
 ' _ "$POLLER"
 

@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 
-POLLER_COMMAND_PATH="tmux-outdated-packages/scripts/$(basename -- "${BASH_SOURCE[0]}")"
 CACHE_DIR="${TMPDIR:-/tmp}/tmux-outdated-packages"
 export PATH="$PATH:/opt/homebrew/bin:/usr/local/bin"
 POLL_INTERVAL="${TMUX_OUTDATED_POLL_INTERVAL:-300}"  # Default 5 minutes
@@ -17,6 +16,7 @@ LOCK_OWNER_FILE="$LOCK_DIR/pid"
 PID_FILE="$CACHE_DIR/poller.pid"
 CHECKING_FILE="$CACHE_DIR/checking"
 COMPLETE_FILE="$CACHE_DIR/complete"
+PROCESS_START_TIME=''
 
 # Package install directories for quick change detection
 BREW_CELLAR="${HOMEBREW_PREFIX:-/usr/local}/Cellar"
@@ -33,25 +33,55 @@ log_debug() {
 	fi
 }
 
-poller_process_is_running() {
-	local pid=$1
-	local process_command
+process_start_time() {
+	local pid=$1 start
 	case "$pid" in
 		'' | *[!0-9]*) return 1 ;;
 	esac
 	kill -0 "$pid" 2>/dev/null || return 1
+	start=$(LC_ALL=C ps -ww -p "$pid" -o lstart= 2>/dev/null |
+		awk '{$1 = $1; print; exit}')
+	[ -n "$start" ] || return 1
+	printf '%s\n' "$start"
+}
+
+poller_command_is_running() {
+	local pid=$1 process_command
+	kill -0 "$pid" 2>/dev/null || return 1
 	process_command=$(ps -ww -p "$pid" -o command= 2>/dev/null) || return 1
 	case "$process_command" in
-		*"$POLLER_COMMAND_PATH"*) return 0 ;;
+		*"/scripts/poller.sh"*) return 0 ;;
 		*) return 1 ;;
 	esac
+}
+
+process_record_is_running() {
+	local file=$1 pid recorded_start actual_start
+	pid=$(awk 'NR == 1 && /^[0-9]+$/ { print; exit }' "$file" 2>/dev/null)
+	recorded_start=$(awk 'NR == 2 {$1 = $1; print; exit}' "$file" 2>/dev/null)
+	[ -n "$pid" ] || return 1
+	if [ -z "$recorded_start" ]; then
+		poller_command_is_running "$pid"
+		return
+	fi
+	actual_start=$(process_start_time "$pid") || return 1
+	[ "$actual_start" = "$recorded_start" ] &&
+		poller_command_is_running "$pid"
+}
+
+write_process_record() {
+	local file=$1
+	if [ -z "$PROCESS_START_TIME" ]; then
+		PROCESS_START_TIME=$(process_start_time "$$") || return 1
+	fi
+	printf '%s\n%s\n' "$$" "$PROCESS_START_TIME" > "$file"
 }
 
 acquire_lock() {
 	local attempts=0 owner
 	while [ "$attempts" -lt 50 ]; do
 		if mkdir "$LOCK_DIR" 2>/dev/null; then
-			if printf '%s\n' "$$" > "$LOCK_OWNER_FILE"; then
+			if write_process_record "$LOCK_OWNER_FILE"; then
 				return 0
 			fi
 			rmdir "$LOCK_DIR" 2>/dev/null || true
@@ -59,7 +89,7 @@ acquire_lock() {
 		fi
 
 		owner=$(awk 'NR == 1 && /^[0-9]+$/ { print; exit }' "$LOCK_OWNER_FILE" 2>/dev/null)
-		if [ -n "$owner" ] && poller_process_is_running "$owner"; then
+		if [ -n "$owner" ] && process_record_is_running "$LOCK_OWNER_FILE"; then
 			return 1
 		fi
 
@@ -116,14 +146,10 @@ setup() {
 }
 
 check_if_running() {
-	if [ -f "$PID_FILE" ]; then
-		local pid
-		pid=$(awk 'NR == 1 && /^[0-9]+$/ { print; exit }' "$PID_FILE")
-		if [ "$pid" != "$$" ] && poller_process_is_running "$pid"; then
-			return 0
-		fi
-	fi
-	return 1
+	local pid
+	[ -f "$PID_FILE" ] || return 1
+	pid=$(awk 'NR == 1 && /^[0-9]+$/ { print; exit }' "$PID_FILE")
+	[ "$pid" != "$$" ] && process_record_is_running "$PID_FILE"
 }
 
 get_dir_mtime() {
@@ -457,7 +483,11 @@ main() {
 	fi
 	
 	# Write PID
-	echo $$ > "$PID_FILE"
+	if ! write_process_record "$PID_FILE"; then
+		log_debug "Unable to write poller PID record"
+		release_lock
+		return 1
+	fi
 	log_debug "PID file written: $PID_FILE"
 	
 	# Trap cleanup
