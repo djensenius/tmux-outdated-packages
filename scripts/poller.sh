@@ -7,7 +7,9 @@ POLL_INTERVAL="${TMUX_OUTDATED_POLL_INTERVAL:-300}"  # Default 5 minutes
 WATCH_INTERVAL=5  # Check file changes every 5 seconds
 CHECK_TIMEOUT=120 # Timeout for each check in seconds
 DEBUG_MODE="${TMUX_OUTDATED_DEBUG:-0}"
-FORCE_UPDATE=0
+REFRESH_GENERATION=0
+APPLIED_REFRESH_GENERATION=0
+CYCLE_REFRESH_GENERATION=0
 CURRENT_FORCE_UPDATE=0
 LOG_FILE="$CACHE_DIR/poller.log"
 LOCK_DIR="$CACHE_DIR/poller.lock"
@@ -19,9 +21,10 @@ COMPLETE_FILE="$CACHE_DIR/complete"
 # Package install directories for quick change detection
 BREW_CELLAR="${HOMEBREW_PREFIX:-/usr/local}/Cellar"
 BREW_TAPS="${HOMEBREW_PREFIX:-/usr/local}/Library/Taps"
-NPM_GLOBAL="$(npm config get prefix 2>/dev/null)/lib/node_modules"
-NPM_BIN="$(npm config get prefix 2>/dev/null)/bin"
-PIP_SITE="$(python3 -m site --user-site 2>/dev/null)"
+NPM_PREFIX="$(npm config get prefix 2>/dev/null || true)"
+NPM_GLOBAL="$NPM_PREFIX/lib/node_modules"
+NPM_BIN="$NPM_PREFIX/bin"
+PIP_SITE="$(python3 -m site --user-site 2>/dev/null || true)"
 CARGO_BIN="${CARGO_HOME:-$HOME/.cargo}/bin"
 
 log_debug() {
@@ -85,7 +88,22 @@ release_lock() {
 
 handle_sigusr1() {
 	log_debug "Received SIGUSR1, forcing update..."
-	FORCE_UPDATE=1
+	REFRESH_GENERATION=$((REFRESH_GENERATION + 1))
+}
+
+begin_check_cycle() {
+	CYCLE_REFRESH_GENERATION=$REFRESH_GENERATION
+	if [ "$CYCLE_REFRESH_GENERATION" -gt "$APPLIED_REFRESH_GENERATION" ]; then
+		CURRENT_FORCE_UPDATE=1
+	else
+		CURRENT_FORCE_UPDATE=0
+	fi
+}
+
+complete_check_cycle() {
+	if [ "$CURRENT_FORCE_UPDATE" -eq 1 ]; then
+		APPLIED_REFRESH_GENERATION=$CYCLE_REFRESH_GENERATION
+	fi
 }
 
 setup() {
@@ -453,9 +471,9 @@ main() {
 	while true; do
 		log_debug "Sleeping for ${WATCH_INTERVAL}s..."
 		sleep "$WATCH_INTERVAL"
-		CURRENT_FORCE_UPDATE=$FORCE_UPDATE
-		FORCE_UPDATE=0
+		begin_check_cycle
 		run_checks_parallel
+		complete_check_cycle
 	done
 }
 

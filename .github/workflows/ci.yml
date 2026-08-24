@@ -24,5 +24,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v6
 
-      - name: Test atomic poller lock
-        run: tests/poller-lock-test.sh
+      - name: Test poller lifecycle
+        run: |
+          tests/poller-lock-test.sh
+          tests/poller-cycle-test.sh

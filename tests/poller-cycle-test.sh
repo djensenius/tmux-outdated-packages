@@ -37,4 +37,16 @@ wait "$signal_sender"
 [ -f "$CACHE_DIR/slow-check-complete" ]
 [ ! -e "$CHECKING_FILE" ]
 [ -f "$COMPLETE_FILE" ]
-[ "$FORCE_UPDATE" -eq 1 ]
+[ "$REFRESH_GENERATION" -eq 1 ]
+
+REFRESH_GENERATION=0
+APPLIED_REFRESH_GENERATION=0
+begin_check_cycle
+handle_sigusr1
+complete_check_cycle
+[ "$APPLIED_REFRESH_GENERATION" -eq 0 ]
+
+begin_check_cycle
+[ "$CURRENT_FORCE_UPDATE" -eq 1 ]
+complete_check_cycle
+[ "$APPLIED_REFRESH_GENERATION" -eq 1 ]
