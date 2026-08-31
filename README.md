@@ -181,8 +181,9 @@ set -g @outdated_mouse_click 'off'
 - Cache is stored in `$TMPDIR/tmux-outdated-packages` (usually `/tmp`)
 - Only one poller instance runs at a time (managed via an atomic lock with PID
   ownership validation)
-- Forced checks touch `refresh-complete` only after the requested generation
-  finishes, so external status clients can wait for acknowledged refreshes
+- A forced-refresh request removes `refresh-complete`; the poller recreates it
+  only after the newest pending refresh generation finishes. External clients
+  can wait for that absent-to-present transition before reading the cache
 - Checks are skipped if package directories haven't changed (smart mtime detection)
 - To manually trigger a check, remove the cache: `rm -rf $TMPDIR/tmux-outdated-packages`
 - To stop the poller: `pkill -f tmux-outdated-packages/scripts/poller.sh`

@@ -145,6 +145,7 @@ cleanup_startup() {
 handle_sigusr1() {
 	log_debug "Received SIGUSR1, forcing update..."
 	REFRESH_GENERATION=$((REFRESH_GENERATION + 1))
+	rm -f "$REFRESH_COMPLETE_FILE"
 }
 
 begin_check_cycle() {
@@ -159,7 +160,12 @@ begin_check_cycle() {
 complete_check_cycle() {
 	if [ "$CURRENT_FORCE_UPDATE" -eq 1 ]; then
 		APPLIED_REFRESH_GENERATION=$CYCLE_REFRESH_GENERATION
-		touch "$REFRESH_COMPLETE_FILE"
+		if [ "$REFRESH_GENERATION" -eq "$CYCLE_REFRESH_GENERATION" ]; then
+			touch "$REFRESH_COMPLETE_FILE"
+			if [ "$REFRESH_GENERATION" -ne "$CYCLE_REFRESH_GENERATION" ]; then
+				rm -f "$REFRESH_COMPLETE_FILE"
+			fi
+		fi
 	fi
 }
 

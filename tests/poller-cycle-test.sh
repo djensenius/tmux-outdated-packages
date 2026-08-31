@@ -54,6 +54,21 @@ complete_check_cycle
 [ "$APPLIED_REFRESH_GENERATION" -eq 1 ]
 [ -f "$REFRESH_COMPLETE_FILE" ]
 
+handle_sigusr1
+[ ! -e "$REFRESH_COMPLETE_FILE" ]
+begin_check_cycle
+[ "$CURRENT_FORCE_UPDATE" -eq 1 ]
+handle_sigusr1
+complete_check_cycle
+[ "$APPLIED_REFRESH_GENERATION" -eq 2 ]
+[ ! -e "$REFRESH_COMPLETE_FILE" ]
+
+begin_check_cycle
+[ "$CURRENT_FORCE_UPDATE" -eq 1 ]
+complete_check_cycle
+[ "$APPLIED_REFRESH_GENERATION" -eq 3 ]
+[ -f "$REFRESH_COMPLETE_FILE" ]
+
 record_file="$CACHE_DIR/test.pid"
 write_process_record "$record_file"
 [ "$(awk 'END { print NR }' "$record_file")" -eq 2 ]
