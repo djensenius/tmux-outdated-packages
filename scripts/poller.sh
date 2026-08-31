@@ -454,7 +454,9 @@ run_checks_parallel() {
 	local cycle_start
 	local pid
 	local pids=()
+	local sigusr1_wait_status wait_status
 	cycle_start=$(date +%s)
+	sigusr1_wait_status=$((128 + $(kill -l USR1)))
 	: > "$CHECKING_FILE"
 	
 	# Run all checks in parallel background jobs
@@ -468,11 +470,16 @@ run_checks_parallel() {
 	check_dnf & pids+=("$!")
 	check_mise & pids+=("$!")
 	
-	# A trapped refresh signal interrupts wait. Retry while the child still
-	# exists so completion is not published before every check has finished.
+	# A trapped refresh signal interrupts wait. Retry only that status so
+	# ordinary checker failures are not mistaken for signal interruptions.
 	for pid in "${pids[@]}"; do
-		while ! wait "$pid" 2>/dev/null; do
-			kill -0 "$pid" 2>/dev/null || break
+		while true; do
+			if wait "$pid" 2>/dev/null; then
+				break
+			else
+				wait_status=$?
+			fi
+			[ "$wait_status" -eq "$sigusr1_wait_status" ] || break
 		done
 	done
 	rm -f "$CHECKING_FILE"
