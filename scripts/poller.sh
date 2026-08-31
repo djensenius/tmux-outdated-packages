@@ -144,12 +144,12 @@ cleanup_startup() {
 
 queue_sigusr1() {
 	REFRESH_GENERATION=$((REFRESH_GENERATION + 1))
+	rm -f "$REFRESH_COMPLETE_FILE"
 }
 
 handle_sigusr1() {
 	log_debug "Received SIGUSR1, forcing update..."
 	queue_sigusr1
-	rm -f "$REFRESH_COMPLETE_FILE"
 }
 
 begin_check_cycle() {

@@ -18,9 +18,8 @@ mkdir -p "$CACHE_DIR"
 : > "$REFRESH_COMPLETE_FILE"
 queue_sigusr1
 [ "$REFRESH_GENERATION" -eq 1 ]
-[ -f "$REFRESH_COMPLETE_FILE" ]
+[ ! -e "$REFRESH_COMPLETE_FILE" ]
 REFRESH_GENERATION=0
-rm -f "$REFRESH_COMPLETE_FILE"
 
 check_brew() {
 	sleep 1
