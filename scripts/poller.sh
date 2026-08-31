@@ -142,9 +142,13 @@ cleanup_startup() {
 	exit 130
 }
 
+queue_sigusr1() {
+	REFRESH_GENERATION=$((REFRESH_GENERATION + 1))
+}
+
 handle_sigusr1() {
 	log_debug "Received SIGUSR1, forcing update..."
-	REFRESH_GENERATION=$((REFRESH_GENERATION + 1))
+	queue_sigusr1
 	rm -f "$REFRESH_COMPLETE_FILE"
 }
 
@@ -508,6 +512,7 @@ cleanup() {
 }
 
 main() {
+	trap queue_sigusr1 SIGUSR1
 	setup
 
 	if ! acquire_lock; then
@@ -516,6 +521,9 @@ main() {
 	fi
 	trap cleanup_startup INT TERM
 	trap handle_sigusr1 SIGUSR1
+	if [ "$REFRESH_GENERATION" -gt "$APPLIED_REFRESH_GENERATION" ]; then
+		rm -f "$REFRESH_COMPLETE_FILE"
+	fi
 	
 	# Check if already running
 	if check_if_running; then
