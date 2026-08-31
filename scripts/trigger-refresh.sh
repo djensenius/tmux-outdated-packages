@@ -28,7 +28,6 @@ if [ -f "$PID_FILE" ]; then
         kill -SIGUSR1 "$PID"
         tmux display-message "Outdated packages: refreshing..."
     else
-        rm -f "$PID_FILE"
         tmux display-message "Outdated packages: poller not running"
     fi
 else

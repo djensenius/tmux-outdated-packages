@@ -126,6 +126,15 @@ release_lock() {
 	rmdir "$LOCK_DIR" 2>/dev/null || true
 }
 
+cleanup_startup() {
+	if [ "$(awk 'NR == 1 { print; exit }' "$PID_FILE" 2>/dev/null)" = "$$" ]; then
+		rm -f "$PID_FILE"
+	fi
+	rm -f "$CACHE_DIR/.pid.$$.tmp"
+	release_lock
+	exit 130
+}
+
 handle_sigusr1() {
 	log_debug "Received SIGUSR1, forcing update..."
 	REFRESH_GENERATION=$((REFRESH_GENERATION + 1))
@@ -484,6 +493,7 @@ main() {
 		log_debug "Poller lock is already held, exiting"
 		exit 0
 	fi
+	trap cleanup_startup INT TERM
 	
 	# Check if already running
 	if check_if_running; then
