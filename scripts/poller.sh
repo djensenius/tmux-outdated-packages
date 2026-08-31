@@ -16,6 +16,7 @@ LOCK_OWNER_FILE="$LOCK_DIR/pid"
 PID_FILE="$CACHE_DIR/poller.pid"
 CHECKING_FILE="$CACHE_DIR/checking"
 COMPLETE_FILE="$CACHE_DIR/complete"
+REFRESH_COMPLETE_FILE="$CACHE_DIR/refresh-complete"
 PROCESS_START_TIME=''
 PROCESS_RECORD_TEMP=''
 
@@ -158,6 +159,7 @@ begin_check_cycle() {
 complete_check_cycle() {
 	if [ "$CURRENT_FORCE_UPDATE" -eq 1 ]; then
 		APPLIED_REFRESH_GENERATION=$CYCLE_REFRESH_GENERATION
+		touch "$REFRESH_COMPLETE_FILE"
 	fi
 }
 

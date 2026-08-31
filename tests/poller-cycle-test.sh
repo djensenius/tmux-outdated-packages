@@ -12,6 +12,7 @@ source "$POLLER"
 CACHE_DIR="$TEST_TMP/cache"
 CHECKING_FILE="$CACHE_DIR/checking"
 COMPLETE_FILE="$CACHE_DIR/complete"
+REFRESH_COMPLETE_FILE="$CACHE_DIR/refresh-complete"
 mkdir -p "$CACHE_DIR"
 
 check_brew() {
@@ -45,11 +46,13 @@ begin_check_cycle
 handle_sigusr1
 complete_check_cycle
 [ "$APPLIED_REFRESH_GENERATION" -eq 0 ]
+[ ! -e "$REFRESH_COMPLETE_FILE" ]
 
 begin_check_cycle
 [ "$CURRENT_FORCE_UPDATE" -eq 1 ]
 complete_check_cycle
 [ "$APPLIED_REFRESH_GENERATION" -eq 1 ]
+[ -f "$REFRESH_COMPLETE_FILE" ]
 
 record_file="$CACHE_DIR/test.pid"
 write_process_record "$record_file"
