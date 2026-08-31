@@ -521,7 +521,9 @@ main() {
 	trap handle_sigusr1 SIGUSR1
 	
 	# Initial check
+	begin_check_cycle
 	run_checks_parallel
+	complete_check_cycle
 	
 	# Poll loop
 	while true; do
