@@ -6,17 +6,28 @@ POLL_INTERVAL="${TMUX_OUTDATED_POLL_INTERVAL:-300}"  # Default 5 minutes
 WATCH_INTERVAL=5  # Check file changes every 5 seconds
 CHECK_TIMEOUT=120 # Timeout for each check in seconds
 DEBUG_MODE="${TMUX_OUTDATED_DEBUG:-0}"
-FORCE_UPDATE=0
+REFRESH_GENERATION=0
+APPLIED_REFRESH_GENERATION=0
+CYCLE_REFRESH_GENERATION=0
+CURRENT_FORCE_UPDATE=0
 LOG_FILE="$CACHE_DIR/poller.log"
-LOCK_FILE="$CACHE_DIR/poller.lock"
+LOCK_DIR="$CACHE_DIR/poller.lock"
+LOCK_OWNER_FILE="$LOCK_DIR/pid"
 PID_FILE="$CACHE_DIR/poller.pid"
+CHECKING_FILE="$CACHE_DIR/checking"
+COMPLETE_FILE="$CACHE_DIR/complete"
+PROCESS_START_TIME=''
+PROCESS_RECORD_TEMP=''
 
 # Package install directories for quick change detection
 BREW_CELLAR="${HOMEBREW_PREFIX:-/usr/local}/Cellar"
 BREW_TAPS="${HOMEBREW_PREFIX:-/usr/local}/Library/Taps"
-NPM_GLOBAL="$(npm config get prefix 2>/dev/null)/lib/node_modules"
-NPM_BIN="$(npm config get prefix 2>/dev/null)/bin"
-PIP_SITE="$(python3 -m site --user-site 2>/dev/null)"
+NPM_PREFIX="$(npm config get prefix 2>/dev/null || true)"
+NPM_WATCH_DIRS=''
+if [ -n "$NPM_PREFIX" ]; then
+	NPM_WATCH_DIRS="$NPM_PREFIX/lib/node_modules:$NPM_PREFIX/bin"
+fi
+PIP_SITE="$(python3 -m site --user-site 2>/dev/null || true)"
 CARGO_BIN="${CARGO_HOME:-$HOME/.cargo}/bin"
 
 log_debug() {
@@ -25,9 +36,129 @@ log_debug() {
 	fi
 }
 
+process_start_time() {
+	local pid=$1 start
+	case "$pid" in
+		'' | *[!0-9]*) return 1 ;;
+	esac
+	kill -0 "$pid" 2>/dev/null || return 1
+	start=$(LC_ALL=C ps -ww -p "$pid" -o lstart= 2>/dev/null |
+		awk '{$1 = $1; print; exit}')
+	[ -n "$start" ] || return 1
+	printf '%s\n' "$start"
+}
+
+poller_command_is_running() {
+	local pid=$1 process_command
+	kill -0 "$pid" 2>/dev/null || return 1
+	process_command=$(ps -ww -p "$pid" -o command= 2>/dev/null) || return 1
+	case "$process_command" in
+		*"/scripts/poller.sh"*) return 0 ;;
+		*) return 1 ;;
+	esac
+}
+
+process_record_is_running() {
+	local file=$1 pid recorded_start actual_start
+	pid=$(awk 'NR == 1 && /^[0-9]+$/ { print; exit }' "$file" 2>/dev/null)
+	recorded_start=$(awk 'NR == 2 {$1 = $1; print; exit}' "$file" 2>/dev/null)
+	[ -n "$pid" ] || return 1
+	if [ -z "$recorded_start" ]; then
+		poller_command_is_running "$pid"
+		return
+	fi
+	actual_start=$(process_start_time "$pid") || return 1
+	[ "$actual_start" = "$recorded_start" ] &&
+		poller_command_is_running "$pid"
+}
+
+write_process_record() {
+	local file=$1
+	if [ -z "$PROCESS_START_TIME" ]; then
+		PROCESS_START_TIME=$(process_start_time "$$") || return 1
+	fi
+	PROCESS_RECORD_TEMP="$CACHE_DIR/.${file##*/}.$$.tmp"
+	if ! printf '%s\n%s\n' "$$" "$PROCESS_START_TIME" > "$PROCESS_RECORD_TEMP"; then
+		rm -f "$PROCESS_RECORD_TEMP"
+		PROCESS_RECORD_TEMP=''
+		return 1
+	fi
+	if ! mv -f "$PROCESS_RECORD_TEMP" "$file"; then
+		rm -f "$PROCESS_RECORD_TEMP"
+		PROCESS_RECORD_TEMP=''
+		return 1
+	fi
+	PROCESS_RECORD_TEMP=''
+}
+
+acquire_lock() {
+	local attempts=0 owner
+	while [ "$attempts" -lt 50 ]; do
+		if mkdir "$LOCK_DIR" 2>/dev/null; then
+			if write_process_record "$LOCK_OWNER_FILE"; then
+				return 0
+			fi
+			rmdir "$LOCK_DIR" 2>/dev/null || true
+			return 1
+		fi
+
+		owner=$(awk 'NR == 1 && /^[0-9]+$/ { print; exit }' "$LOCK_OWNER_FILE" 2>/dev/null)
+		if [ -n "$owner" ] && process_record_is_running "$LOCK_OWNER_FILE"; then
+			return 1
+		fi
+
+		# Give a new owner time to publish its PID before treating an empty
+		# directory as a stale lock.
+		if [ -n "$owner" ] || [ "$attempts" -ge 10 ]; then
+			rm -f "$LOCK_OWNER_FILE"
+			rmdir "$LOCK_DIR" 2>/dev/null || true
+			if [ -e "$LOCK_DIR" ] && [ ! -d "$LOCK_DIR" ]; then
+				rm -f "$LOCK_DIR"
+			fi
+		fi
+		attempts=$((attempts + 1))
+		sleep 0.1
+	done
+	return 1
+}
+
+release_lock() {
+	local owner
+	owner=$(awk 'NR == 1 && /^[0-9]+$/ { print; exit }' "$LOCK_OWNER_FILE" 2>/dev/null)
+	[ "$owner" = "$$" ] || return 0
+	rm -f "$LOCK_OWNER_FILE"
+	rmdir "$LOCK_DIR" 2>/dev/null || true
+}
+
+cleanup_startup() {
+	if [ "$(awk 'NR == 1 { print; exit }' "$PID_FILE" 2>/dev/null)" = "$$" ]; then
+		rm -f "$PID_FILE"
+	fi
+	if [ -n "$PROCESS_RECORD_TEMP" ]; then
+		rm -f "$PROCESS_RECORD_TEMP"
+	fi
+	release_lock
+	exit 130
+}
+
 handle_sigusr1() {
 	log_debug "Received SIGUSR1, forcing update..."
-	FORCE_UPDATE=1
+	REFRESH_GENERATION=$((REFRESH_GENERATION + 1))
+}
+
+begin_check_cycle() {
+	CYCLE_REFRESH_GENERATION=$REFRESH_GENERATION
+	if [ "$CYCLE_REFRESH_GENERATION" -gt "$APPLIED_REFRESH_GENERATION" ]; then
+		CURRENT_FORCE_UPDATE=1
+	else
+		CURRENT_FORCE_UPDATE=0
+	fi
+}
+
+complete_check_cycle() {
+	if [ "$CURRENT_FORCE_UPDATE" -eq 1 ]; then
+		APPLIED_REFRESH_GENERATION=$CYCLE_REFRESH_GENERATION
+	fi
 }
 
 setup() {
@@ -40,14 +171,10 @@ setup() {
 }
 
 check_if_running() {
-	if [ -f "$PID_FILE" ]; then
-		local pid
-		pid=$(cat "$PID_FILE")
-		if kill -0 "$pid" 2>/dev/null; then
-			return 0
-		fi
-	fi
-	return 1
+	local pid
+	[ -f "$PID_FILE" ] || return 1
+	pid=$(awk 'NR == 1 && /^[0-9]+$/ { print; exit }' "$PID_FILE" 2>/dev/null)
+	[ "$pid" != "$$" ] && process_record_is_running "$PID_FILE"
 }
 
 get_dir_mtime() {
@@ -70,7 +197,7 @@ should_check() {
 	fi
 	
 	# Check for forced update
-	if [ "${FORCE_UPDATE:-0}" -eq 1 ]; then
+	if [ "${CURRENT_FORCE_UPDATE:-0}" -eq 1 ]; then
 		log_debug "$name: Forced update requested"
 		return 0
 	fi
@@ -153,7 +280,7 @@ check_npm() {
 		return
 	fi
 	
-	if should_check "npm" "$NPM_GLOBAL:$NPM_BIN"; then
+	if should_check "npm" "$NPM_WATCH_DIRS"; then
 		local start
 		start=$(date +%s)
 		local output
@@ -325,21 +452,38 @@ check_mise() {
 run_checks_parallel() {
 	log_debug "--- Starting check cycle ---"
 	local cycle_start
+	local pid
+	local pids=()
+	local sigusr1_wait_status wait_status
 	cycle_start=$(date +%s)
+	sigusr1_wait_status=$((128 + $(kill -l USR1)))
+	: > "$CHECKING_FILE"
 	
 	# Run all checks in parallel background jobs
-	check_brew &
-	check_npm &
-	check_pip &
-	check_cargo &
-	check_composer &
-	check_go &
-	check_apt &
-	check_dnf &
-	check_mise &
+	check_brew & pids+=("$!")
+	check_npm & pids+=("$!")
+	check_pip & pids+=("$!")
+	check_cargo & pids+=("$!")
+	check_composer & pids+=("$!")
+	check_go & pids+=("$!")
+	check_apt & pids+=("$!")
+	check_dnf & pids+=("$!")
+	check_mise & pids+=("$!")
 	
-	# Wait for all background jobs to complete
-	wait
+	# A trapped refresh signal interrupts wait. Retry only that status so
+	# ordinary checker failures are not mistaken for signal interruptions.
+	for pid in "${pids[@]}"; do
+		while true; do
+			if wait "$pid" 2>/dev/null; then
+				break
+			else
+				wait_status=$?
+			fi
+			[ "$wait_status" -eq "$sigusr1_wait_status" ] || break
+		done
+	done
+	rm -f "$CHECKING_FILE"
+	touch "$COMPLETE_FILE"
 	
 	local cycle_duration=$(($(date +%s) - cycle_start))
 	log_debug "--- Check cycle complete (took ${cycle_duration}s) ---"
@@ -347,21 +491,36 @@ run_checks_parallel() {
 
 cleanup() {
 	log_debug "=== Poller stopped ==="
-	rm -f "$LOCK_FILE" "$PID_FILE"
+	if [ "$(awk 'NR == 1 { print; exit }' "$PID_FILE" 2>/dev/null)" = "$$" ]; then
+		rm -f "$PID_FILE"
+	fi
+	rm -f "$CHECKING_FILE"
+	release_lock
 	exit 0
 }
 
 main() {
 	setup
+
+	if ! acquire_lock; then
+		log_debug "Poller lock is already held, exiting"
+		exit 0
+	fi
+	trap cleanup_startup INT TERM
 	
 	# Check if already running
 	if check_if_running; then
 		log_debug "Poller already running, exiting"
+		release_lock
 		exit 0
 	fi
 	
 	# Write PID
-	echo $$ > "$PID_FILE"
+	if ! write_process_record "$PID_FILE"; then
+		log_debug "Unable to write poller PID record"
+		release_lock
+		return 1
+	fi
 	log_debug "PID file written: $PID_FILE"
 	
 	# Trap cleanup
@@ -369,15 +528,20 @@ main() {
 	trap handle_sigusr1 SIGUSR1
 	
 	# Initial check
+	begin_check_cycle
 	run_checks_parallel
+	complete_check_cycle
 	
 	# Poll loop
 	while true; do
 		log_debug "Sleeping for ${WATCH_INTERVAL}s..."
 		sleep "$WATCH_INTERVAL"
+		begin_check_cycle
 		run_checks_parallel
-		FORCE_UPDATE=0
+		complete_check_cycle
 	done
 }
 
-main
+if [ "${BASH_SOURCE[0]}" = "$0" ]; then
+	main
+fi

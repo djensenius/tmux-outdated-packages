@@ -179,7 +179,8 @@ set -g @outdated_mouse_click 'off'
 - For Go support, install `go-global-update`
 - The background poller automatically starts when tmux loads the plugin
 - Cache is stored in `$TMPDIR/tmux-outdated-packages` (usually `/tmp`)
-- Only one poller instance runs at a time (managed via PID file)
+- Only one poller instance runs at a time (managed via an atomic lock with PID
+  ownership validation)
 - Checks are skipped if package directories haven't changed (smart mtime detection)
 - To manually trigger a check, remove the cache: `rm -rf $TMPDIR/tmux-outdated-packages`
 - To stop the poller: `pkill -f tmux-outdated-packages/scripts/poller.sh`
