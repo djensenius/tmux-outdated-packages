@@ -509,6 +509,7 @@ main() {
 		exit 0
 	fi
 	trap cleanup_startup INT TERM
+	trap handle_sigusr1 SIGUSR1
 	
 	# Check if already running
 	if check_if_running; then
@@ -527,7 +528,6 @@ main() {
 	
 	# Trap cleanup
 	trap cleanup EXIT INT TERM
-	trap handle_sigusr1 SIGUSR1
 	
 	# Initial check
 	begin_check_cycle
