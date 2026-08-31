@@ -25,6 +25,7 @@ export TMPDIR="$TEST_TMP"
 CACHE_DIR="$TMPDIR/tmux-outdated-packages"
 
 bash -c '
+	set -euo pipefail
 	source "$1"
 	setup
 	acquire_lock
@@ -57,6 +58,7 @@ wait "$owner_pid" 2>/dev/null || true
 owner_pid=''
 
 bash -c '
+	set -euo pipefail
 	source "$1"
 	setup
 	acquire_lock
@@ -67,6 +69,7 @@ bash -c '
 [ ! -e "$CACHE_DIR/poller.lock" ]
 
 bash -c '
+	set -euo pipefail
 	source "$1"
 	setup
 	acquire_lock
