@@ -50,3 +50,20 @@ begin_check_cycle
 [ "$CURRENT_FORCE_UPDATE" -eq 1 ]
 complete_check_cycle
 [ "$APPLIED_REFRESH_GENERATION" -eq 1 ]
+
+record_file="$CACHE_DIR/test.pid"
+write_process_record "$record_file"
+[ "$(awk 'END { print NR }' "$record_file")" -eq 2 ]
+[ "$(awk 'NR == 1 { print; exit }' "$record_file")" = "$$" ]
+[ -n "$(awk 'NR == 2 {$1 = $1; print; exit}' "$record_file")" ]
+[ ! -e "$CACHE_DIR/.test.pid.$$.tmp" ]
+
+mock_bin="$TEST_TMP/bin"
+mkdir -p "$mock_bin"
+printf '%s\n' '#!/usr/bin/env bash' 'exit 1' > "$mock_bin/npm"
+chmod +x "$mock_bin/npm"
+PATH="$mock_bin:/usr/bin:/bin" bash -c '
+	# shellcheck source=/dev/null
+	source "$1"
+	[ -z "$NPM_WATCH_DIRS" ]
+' _ "$POLLER"

@@ -22,8 +22,10 @@ PROCESS_START_TIME=''
 BREW_CELLAR="${HOMEBREW_PREFIX:-/usr/local}/Cellar"
 BREW_TAPS="${HOMEBREW_PREFIX:-/usr/local}/Library/Taps"
 NPM_PREFIX="$(npm config get prefix 2>/dev/null || true)"
-NPM_GLOBAL="$NPM_PREFIX/lib/node_modules"
-NPM_BIN="$NPM_PREFIX/bin"
+NPM_WATCH_DIRS=''
+if [ -n "$NPM_PREFIX" ]; then
+	NPM_WATCH_DIRS="$NPM_PREFIX/lib/node_modules:$NPM_PREFIX/bin"
+fi
 PIP_SITE="$(python3 -m site --user-site 2>/dev/null || true)"
 CARGO_BIN="${CARGO_HOME:-$HOME/.cargo}/bin"
 
@@ -70,11 +72,19 @@ process_record_is_running() {
 }
 
 write_process_record() {
-	local file=$1
+	local file=$1 temp
 	if [ -z "$PROCESS_START_TIME" ]; then
 		PROCESS_START_TIME=$(process_start_time "$$") || return 1
 	fi
-	printf '%s\n%s\n' "$$" "$PROCESS_START_TIME" > "$file"
+	temp="$CACHE_DIR/.${file##*/}.$$.tmp"
+	if ! printf '%s\n%s\n' "$$" "$PROCESS_START_TIME" > "$temp"; then
+		rm -f "$temp"
+		return 1
+	fi
+	if ! mv -f "$temp" "$file"; then
+		rm -f "$temp"
+		return 1
+	fi
 }
 
 acquire_lock() {
@@ -255,7 +265,7 @@ check_npm() {
 		return
 	fi
 	
-	if should_check "npm" "$NPM_GLOBAL:$NPM_BIN"; then
+	if should_check "npm" "$NPM_WATCH_DIRS"; then
 		local start
 		start=$(date +%s)
 		local output
