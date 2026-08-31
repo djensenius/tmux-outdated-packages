@@ -24,14 +24,14 @@ poller_is_running() {
     [[ "$process_command" == *"/scripts/poller.sh"* ]]
 }
 
-if [ -f "$PID_FILE" ]; then
+attempts=0
+while [ "$attempts" -lt 2 ]; do
     PID=$(awk 'NR == 1 && /^[0-9]+$/ { print; exit }' "$PID_FILE" 2>/dev/null)
-    if poller_is_running "$PID"; then
-        kill -SIGUSR1 "$PID"
+    if poller_is_running "$PID" && kill -SIGUSR1 "$PID" 2>/dev/null; then
         tmux display-message "Outdated packages: refreshing..."
-    else
-        tmux display-message "Outdated packages: poller not running"
+        exit 0
     fi
-else
-    tmux display-message "Outdated packages: poller not running"
-fi
+    attempts=$((attempts + 1))
+done
+
+tmux display-message "Outdated packages: poller not running"
