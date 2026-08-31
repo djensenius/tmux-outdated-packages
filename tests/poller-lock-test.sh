@@ -71,6 +71,8 @@ bash -c '
 	setup
 	acquire_lock
 	trap cleanup_startup INT TERM
+	PROCESS_RECORD_TEMP="$CACHE_DIR/.poller.pid.$$.tmp"
+	: > "$PROCESS_RECORD_TEMP"
 	: > "$CACHE_DIR/startup.ready"
 	while :; do
 		sleep 1
@@ -88,8 +90,9 @@ done
 [ -f "$CACHE_DIR/startup.ready" ]
 kill -TERM "$startup_pid"
 wait "$startup_pid" 2>/dev/null || true
-startup_pid=''
 [ ! -e "$CACHE_DIR/poller.lock" ]
+[ ! -e "$CACHE_DIR/.poller.pid.$startup_pid.tmp" ]
+startup_pid=''
 
 mock_bin="$TEST_TMP/bin"
 mkdir -p "$mock_bin"

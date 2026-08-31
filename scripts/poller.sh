@@ -17,6 +17,7 @@ PID_FILE="$CACHE_DIR/poller.pid"
 CHECKING_FILE="$CACHE_DIR/checking"
 COMPLETE_FILE="$CACHE_DIR/complete"
 PROCESS_START_TIME=''
+PROCESS_RECORD_TEMP=''
 
 # Package install directories for quick change detection
 BREW_CELLAR="${HOMEBREW_PREFIX:-/usr/local}/Cellar"
@@ -72,19 +73,22 @@ process_record_is_running() {
 }
 
 write_process_record() {
-	local file=$1 temp
+	local file=$1
 	if [ -z "$PROCESS_START_TIME" ]; then
 		PROCESS_START_TIME=$(process_start_time "$$") || return 1
 	fi
-	temp="$CACHE_DIR/.${file##*/}.$$.tmp"
-	if ! printf '%s\n%s\n' "$$" "$PROCESS_START_TIME" > "$temp"; then
-		rm -f "$temp"
+	PROCESS_RECORD_TEMP="$CACHE_DIR/.${file##*/}.$$.tmp"
+	if ! printf '%s\n%s\n' "$$" "$PROCESS_START_TIME" > "$PROCESS_RECORD_TEMP"; then
+		rm -f "$PROCESS_RECORD_TEMP"
+		PROCESS_RECORD_TEMP=''
 		return 1
 	fi
-	if ! mv -f "$temp" "$file"; then
-		rm -f "$temp"
+	if ! mv -f "$PROCESS_RECORD_TEMP" "$file"; then
+		rm -f "$PROCESS_RECORD_TEMP"
+		PROCESS_RECORD_TEMP=''
 		return 1
 	fi
+	PROCESS_RECORD_TEMP=''
 }
 
 acquire_lock() {
@@ -130,7 +134,9 @@ cleanup_startup() {
 	if [ "$(awk 'NR == 1 { print; exit }' "$PID_FILE" 2>/dev/null)" = "$$" ]; then
 		rm -f "$PID_FILE"
 	fi
-	rm -f "$CACHE_DIR/.pid.$$.tmp"
+	if [ -n "$PROCESS_RECORD_TEMP" ]; then
+		rm -f "$PROCESS_RECORD_TEMP"
+	fi
 	release_lock
 	exit 130
 }

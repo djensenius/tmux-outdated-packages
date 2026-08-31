@@ -57,6 +57,7 @@ write_process_record "$record_file"
 [ "$(awk 'NR == 1 { print; exit }' "$record_file")" = "$$" ]
 [ -n "$(awk 'NR == 2 {$1 = $1; print; exit}' "$record_file")" ]
 [ ! -e "$CACHE_DIR/.test.pid.$$.tmp" ]
+[ -z "$PROCESS_RECORD_TEMP" ]
 
 mock_bin="$TEST_TMP/bin"
 mkdir -p "$mock_bin"
