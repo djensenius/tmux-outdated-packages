@@ -6,7 +6,7 @@ PID_FILE="$CACHE_DIR/poller.pid"
 poller_is_running() {
     local pid=$1 recorded_start actual_start process_command
     [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null || return 1
-    recorded_start=$(awk 'NR == 2 {$1 = $1; print; exit}' "$PID_FILE")
+    recorded_start=$(awk 'NR == 2 {$1 = $1; print; exit}' "$PID_FILE" 2>/dev/null)
     if [ -n "$recorded_start" ]; then
         actual_start=$(LC_ALL=C ps -ww -p "$pid" -o lstart= 2>/dev/null |
             awk '{$1 = $1; print; exit}')
@@ -23,7 +23,7 @@ poller_is_running() {
 }
 
 if [ -f "$PID_FILE" ]; then
-    PID=$(awk 'NR == 1 && /^[0-9]+$/ { print; exit }' "$PID_FILE")
+    PID=$(awk 'NR == 1 && /^[0-9]+$/ { print; exit }' "$PID_FILE" 2>/dev/null)
     if poller_is_running "$PID"; then
         kill -SIGUSR1 "$PID"
         tmux display-message "Outdated packages: refreshing..."

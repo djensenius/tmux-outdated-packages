@@ -173,7 +173,7 @@ setup() {
 check_if_running() {
 	local pid
 	[ -f "$PID_FILE" ] || return 1
-	pid=$(awk 'NR == 1 && /^[0-9]+$/ { print; exit }' "$PID_FILE")
+	pid=$(awk 'NR == 1 && /^[0-9]+$/ { print; exit }' "$PID_FILE" 2>/dev/null)
 	[ "$pid" != "$$" ] && process_record_is_running "$PID_FILE"
 }
 
