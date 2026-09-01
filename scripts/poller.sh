@@ -16,6 +16,7 @@ LOCK_OWNER_FILE="$LOCK_DIR/pid"
 PID_FILE="$CACHE_DIR/poller.pid"
 CHECKING_FILE="$CACHE_DIR/checking"
 COMPLETE_FILE="$CACHE_DIR/complete"
+REFRESH_COMPLETE_FILE="$CACHE_DIR/refresh-complete"
 PROCESS_START_TIME=''
 PROCESS_RECORD_TEMP=''
 
@@ -141,9 +142,14 @@ cleanup_startup() {
 	exit 130
 }
 
+queue_sigusr1() {
+	REFRESH_GENERATION=$((REFRESH_GENERATION + 1))
+	rm -f "$REFRESH_COMPLETE_FILE"
+}
+
 handle_sigusr1() {
 	log_debug "Received SIGUSR1, forcing update..."
-	REFRESH_GENERATION=$((REFRESH_GENERATION + 1))
+	queue_sigusr1
 }
 
 begin_check_cycle() {
@@ -158,6 +164,13 @@ begin_check_cycle() {
 complete_check_cycle() {
 	if [ "$CURRENT_FORCE_UPDATE" -eq 1 ]; then
 		APPLIED_REFRESH_GENERATION=$CYCLE_REFRESH_GENERATION
+		if [ "$REFRESH_GENERATION" -eq "$CYCLE_REFRESH_GENERATION" ]; then
+			touch "$REFRESH_COMPLETE_FILE"
+			# A signal can arrive between the generation check and publication.
+			if [ "$REFRESH_GENERATION" -ne "$CYCLE_REFRESH_GENERATION" ]; then
+				rm -f "$REFRESH_COMPLETE_FILE"
+			fi
+		fi
 	fi
 }
 
@@ -500,6 +513,7 @@ cleanup() {
 }
 
 main() {
+	trap queue_sigusr1 SIGUSR1
 	setup
 
 	if ! acquire_lock; then
@@ -507,6 +521,10 @@ main() {
 		exit 0
 	fi
 	trap cleanup_startup INT TERM
+	trap handle_sigusr1 SIGUSR1
+	if [ "$REFRESH_GENERATION" -gt "$APPLIED_REFRESH_GENERATION" ]; then
+		rm -f "$REFRESH_COMPLETE_FILE"
+	fi
 	
 	# Check if already running
 	if check_if_running; then
@@ -525,7 +543,6 @@ main() {
 	
 	# Trap cleanup
 	trap cleanup EXIT INT TERM
-	trap handle_sigusr1 SIGUSR1
 	
 	# Initial check
 	begin_check_cycle

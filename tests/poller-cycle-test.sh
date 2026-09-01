@@ -12,7 +12,14 @@ source "$POLLER"
 CACHE_DIR="$TEST_TMP/cache"
 CHECKING_FILE="$CACHE_DIR/checking"
 COMPLETE_FILE="$CACHE_DIR/complete"
+REFRESH_COMPLETE_FILE="$CACHE_DIR/refresh-complete"
 mkdir -p "$CACHE_DIR"
+
+: > "$REFRESH_COMPLETE_FILE"
+queue_sigusr1
+[ "$REFRESH_GENERATION" -eq 1 ]
+[ ! -e "$REFRESH_COMPLETE_FILE" ]
+REFRESH_GENERATION=0
 
 check_brew() {
 	sleep 1
@@ -45,11 +52,28 @@ begin_check_cycle
 handle_sigusr1
 complete_check_cycle
 [ "$APPLIED_REFRESH_GENERATION" -eq 0 ]
+[ ! -e "$REFRESH_COMPLETE_FILE" ]
 
 begin_check_cycle
 [ "$CURRENT_FORCE_UPDATE" -eq 1 ]
 complete_check_cycle
 [ "$APPLIED_REFRESH_GENERATION" -eq 1 ]
+[ -f "$REFRESH_COMPLETE_FILE" ]
+
+handle_sigusr1
+[ ! -e "$REFRESH_COMPLETE_FILE" ]
+begin_check_cycle
+[ "$CURRENT_FORCE_UPDATE" -eq 1 ]
+handle_sigusr1
+complete_check_cycle
+[ "$APPLIED_REFRESH_GENERATION" -eq 2 ]
+[ ! -e "$REFRESH_COMPLETE_FILE" ]
+
+begin_check_cycle
+[ "$CURRENT_FORCE_UPDATE" -eq 1 ]
+complete_check_cycle
+[ "$APPLIED_REFRESH_GENERATION" -eq 3 ]
+[ -f "$REFRESH_COMPLETE_FILE" ]
 
 record_file="$CACHE_DIR/test.pid"
 write_process_record "$record_file"
