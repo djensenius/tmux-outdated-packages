@@ -165,6 +165,15 @@ cleanup_complete_temp
 [ ! -e "$cleanup_temp" ]
 [ -z "$COMPLETE_TEMP" ]
 
+cleanup_status=0
+if (cleanup 23); then
+	printf 'cleanup unexpectedly replaced a failure status\n' >&2
+	exit 1
+else
+	cleanup_status=$?
+fi
+[ "$cleanup_status" -eq 23 ]
+
 REFRESH_GENERATION=0
 APPLIED_REFRESH_GENERATION=0
 begin_check_cycle

@@ -550,6 +550,8 @@ run_checks_parallel() {
 }
 
 cleanup() {
+	local status="${1:-$?}"
+	trap - EXIT INT TERM
 	log_debug "=== Poller stopped ==="
 	if [ "$(awk 'NR == 1 { print; exit }' "$PID_FILE" 2>/dev/null)" = "$$" ]; then
 		rm -f "$PID_FILE"
@@ -557,7 +559,7 @@ cleanup() {
 	rm -f "$CHECKING_FILE"
 	cleanup_complete_temp
 	release_lock
-	exit 0
+	exit "$status"
 }
 
 main() {
@@ -593,7 +595,7 @@ main() {
 	log_debug "PID file written: $PID_FILE"
 	
 	# Trap cleanup
-	trap cleanup EXIT INT TERM
+	trap 'cleanup $?' EXIT INT TERM
 	
 	# Initial check
 	begin_check_cycle
