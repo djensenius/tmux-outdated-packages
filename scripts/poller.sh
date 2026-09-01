@@ -6,6 +6,8 @@ POLL_INTERVAL="${TMUX_OUTDATED_POLL_INTERVAL:-300}"  # Default 5 minutes
 WATCH_INTERVAL=5  # Check file changes every 5 seconds
 CHECK_TIMEOUT=120 # Timeout for each check in seconds
 DEBUG_MODE="${TMUX_OUTDATED_DEBUG:-0}"
+TIMEOUT_COMMAND=''
+COMPLETE_GENERATION=0
 REFRESH_GENERATION=0
 APPLIED_REFRESH_GENERATION=0
 CYCLE_REFRESH_GENERATION=0
@@ -19,6 +21,7 @@ COMPLETE_FILE="$CACHE_DIR/complete"
 REFRESH_COMPLETE_FILE="$CACHE_DIR/refresh-complete"
 PROCESS_START_TIME=''
 PROCESS_RECORD_TEMP=''
+COMPLETE_TEMP=''
 
 # Package install directories for quick change detection
 BREW_CELLAR="${HOMEBREW_PREFIX:-/usr/local}/Cellar"
@@ -35,6 +38,19 @@ log_debug() {
 	if [ "$DEBUG_MODE" = "1" ]; then
 		echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >> "$LOG_FILE"
 	fi
+}
+
+resolve_timeout_command() {
+	TIMEOUT_COMMAND=$(command -v timeout 2>/dev/null) && return 0
+	TIMEOUT_COMMAND=$(command -v gtimeout 2>/dev/null) && return 0
+	TIMEOUT_COMMAND=''
+	printf '%s\n' \
+		"tmux-outdated-packages: neither 'timeout' nor 'gtimeout' is available; install GNU coreutils (brew install coreutils on macOS)." >&2
+	return 1
+}
+
+run_with_timeout() {
+	"$TIMEOUT_COMMAND" "$CHECK_TIMEOUT" "$@"
 }
 
 process_start_time() {
@@ -92,6 +108,33 @@ write_process_record() {
 	PROCESS_RECORD_TEMP=''
 }
 
+cleanup_complete_temp() {
+	if [ -n "$COMPLETE_TEMP" ]; then
+		rm -f "$COMPLETE_TEMP"
+		COMPLETE_TEMP=''
+	fi
+}
+
+publish_complete() {
+	local next_generation token
+	if [ -z "$PROCESS_START_TIME" ]; then
+		PROCESS_START_TIME=$(process_start_time "$$") || return 1
+	fi
+	next_generation=$((COMPLETE_GENERATION + 1))
+	token="$$:${PROCESS_START_TIME}:${next_generation}"
+	COMPLETE_TEMP="$CACHE_DIR/.complete.$$.${next_generation}.tmp"
+	if ! printf '%s\n' "$token" > "$COMPLETE_TEMP"; then
+		cleanup_complete_temp
+		return 1
+	fi
+	if ! mv -f "$COMPLETE_TEMP" "$COMPLETE_FILE"; then
+		cleanup_complete_temp
+		return 1
+	fi
+	COMPLETE_GENERATION=$next_generation
+	COMPLETE_TEMP=''
+}
+
 acquire_lock() {
 	local attempts=0 owner
 	while [ "$attempts" -lt 50 ]; do
@@ -138,6 +181,7 @@ cleanup_startup() {
 	if [ -n "$PROCESS_RECORD_TEMP" ]; then
 		rm -f "$PROCESS_RECORD_TEMP"
 	fi
+	cleanup_complete_temp
 	release_lock
 	exit 130
 }
@@ -277,7 +321,7 @@ check_brew() {
 		local start
 		start=$(date +%s)
 		local output
-		output=$(timeout "$CHECK_TIMEOUT" brew outdated --verbose 2>/dev/null)
+		output=$(run_with_timeout brew outdated --verbose 2>/dev/null)
 		local count
 		count=$(echo "$output" | grep -c '[^[:space:]]' || echo "0")
 		local duration=$(($(date +%s) - start))
@@ -297,7 +341,7 @@ check_npm() {
 		local start
 		start=$(date +%s)
 		local output
-		output=$(timeout "$CHECK_TIMEOUT" npm outdated -g 2>/dev/null)
+		output=$(run_with_timeout npm outdated -g 2>/dev/null)
 		local count
 		count=$(echo "$output" | tail -n +2 | wc -l | tr -d ' ')
 		local duration=$(($(date +%s) - start))
@@ -317,7 +361,7 @@ check_pip() {
 		local start
 		start=$(date +%s)
 		local output
-		output=$(timeout "$CHECK_TIMEOUT" pip3 list --outdated 2>/dev/null)
+		output=$(run_with_timeout pip3 list --outdated 2>/dev/null)
 		local count
 		count=$(echo "$output" | tail -n +3 | wc -l | tr -d ' ')
 		local duration=$(($(date +%s) - start))
@@ -337,7 +381,7 @@ check_cargo() {
 		local start
 		start=$(date +%s)
 		local raw_output
-		raw_output=$(timeout "$CHECK_TIMEOUT" cargo install-update --list 2>/dev/null)
+		raw_output=$(run_with_timeout cargo install-update --list 2>/dev/null)
 		local output
 		output=$(echo "$raw_output" | grep -E "Needs update|Yes[[:space:]]*$")
 		local count
@@ -359,7 +403,7 @@ check_composer() {
 		local start
 		start=$(date +%s)
 		local output
-		output=$(timeout "$CHECK_TIMEOUT" composer global outdated 2>/dev/null)
+		output=$(run_with_timeout composer global outdated 2>/dev/null)
 		local count
 		count=$(echo "$output" | grep -c '^[a-z]' || echo "0")
 		local duration=$(($(date +%s) - start))
@@ -379,7 +423,7 @@ check_go() {
 		local start
 		start=$(date +%s)
 		local output
-		output=$(timeout "$CHECK_TIMEOUT" go-global-update -n 2>/dev/null)
+		output=$(run_with_timeout go-global-update -n 2>/dev/null)
 		local count
 		count=$(echo "$output" | grep -c "outdated" || echo "0")
 		local duration=$(($(date +%s) - start))
@@ -400,7 +444,7 @@ check_apt() {
 			local start
 			start=$(date +%s)
 			local output
-			output=$(timeout "$CHECK_TIMEOUT" apt list --upgradable 2>/dev/null)
+			output=$(run_with_timeout apt list --upgradable 2>/dev/null)
 			local count
 			count=$(echo "$output" | grep -c "upgradable" || echo "0")
 			local duration=$(($(date +%s) - start))
@@ -423,7 +467,7 @@ check_dnf() {
 		local start
 		start=$(date +%s)
 		local output
-		output=$(timeout "$CHECK_TIMEOUT" dnf list --upgrades 2>/dev/null)
+		output=$(run_with_timeout dnf list --upgrades 2>/dev/null)
 		local count
 		count=$(echo "$output" | tail -n +2 | wc -l | tr -d ' ')
 		local duration=$(($(date +%s) - start))
@@ -446,7 +490,7 @@ check_mise() {
 		local start
 		start=$(date +%s)
 		local output
-		output=$(timeout "$CHECK_TIMEOUT" mise outdated 2>/dev/null)
+		output=$(run_with_timeout mise outdated 2>/dev/null)
 		local count=0
 		
 		if [[ "$output" != *"All tools are up to date"* ]] && [ -n "$output" ]; then
@@ -495,8 +539,11 @@ run_checks_parallel() {
 			[ "$wait_status" -eq "$sigusr1_wait_status" ] || break
 		done
 	done
+	if ! publish_complete; then
+		log_debug "Unable to publish check cycle completion"
+		return 1
+	fi
 	rm -f "$CHECKING_FILE"
-	touch "$COMPLETE_FILE"
 	
 	local cycle_duration=$(($(date +%s) - cycle_start))
 	log_debug "--- Check cycle complete (took ${cycle_duration}s) ---"
@@ -508,11 +555,15 @@ cleanup() {
 		rm -f "$PID_FILE"
 	fi
 	rm -f "$CHECKING_FILE"
+	cleanup_complete_temp
 	release_lock
 	exit 0
 }
 
 main() {
+	if ! resolve_timeout_command; then
+		return 1
+	fi
 	trap queue_sigusr1 SIGUSR1
 	setup
 
@@ -546,7 +597,9 @@ main() {
 	
 	# Initial check
 	begin_check_cycle
-	run_checks_parallel
+	if ! run_checks_parallel; then
+		return 1
+	fi
 	complete_check_cycle
 	
 	# Poll loop
@@ -554,7 +607,9 @@ main() {
 		log_debug "Sleeping for ${WATCH_INTERVAL}s..."
 		sleep "$WATCH_INTERVAL"
 		begin_check_cycle
-		run_checks_parallel
+		if ! run_checks_parallel; then
+			return 1
+		fi
 		complete_check_cycle
 	done
 }
