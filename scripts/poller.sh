@@ -541,6 +541,7 @@ run_checks_parallel() {
 	done
 	if ! publish_complete; then
 		log_debug "Unable to publish check cycle completion"
+		rm -f "$CHECKING_FILE"
 		return 1
 	fi
 	rm -f "$CHECKING_FILE"

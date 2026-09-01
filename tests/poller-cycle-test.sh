@@ -148,7 +148,7 @@ previous_generation=$COMPLETE_GENERATION
 failed_temp="$CACHE_DIR/.complete.$$.$((previous_generation + 1)).tmp"
 # shellcheck disable=SC2317,SC2329 # Forces the publish_complete failure path.
 mv() { return 1; }
-if publish_complete; then
+if run_checks_parallel; then
 	printf 'completion publication unexpectedly succeeded\n' >&2
 	exit 1
 fi
@@ -156,6 +156,7 @@ unset -f mv
 [ "$COMPLETE_GENERATION" -eq "$previous_generation" ]
 [ "$(cat "$COMPLETE_FILE")" = "$atomic_token" ]
 [ ! -e "$failed_temp" ]
+[ ! -e "$CHECKING_FILE" ]
 [ -z "$COMPLETE_TEMP" ]
 
 COMPLETE_TEMP="$CACHE_DIR/.complete.cleanup.tmp"
