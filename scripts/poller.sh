@@ -166,6 +166,7 @@ complete_check_cycle() {
 		APPLIED_REFRESH_GENERATION=$CYCLE_REFRESH_GENERATION
 		if [ "$REFRESH_GENERATION" -eq "$CYCLE_REFRESH_GENERATION" ]; then
 			touch "$REFRESH_COMPLETE_FILE"
+			# A signal can arrive between the generation check and publication.
 			if [ "$REFRESH_GENERATION" -ne "$CYCLE_REFRESH_GENERATION" ]; then
 				rm -f "$REFRESH_COMPLETE_FILE"
 			fi
