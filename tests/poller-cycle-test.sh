@@ -79,7 +79,7 @@ queue_sigusr1
 [ ! -e "$REFRESH_COMPLETE_FILE" ]
 REFRESH_GENERATION=0
 
-# shellcheck disable=SC2329 # Invoked by run_checks_parallel from the sourced poller.
+# shellcheck disable=SC2317,SC2329 # Invoked by run_checks_parallel from the sourced poller.
 check_brew() {
 	sleep 1
 	: > "$CACHE_DIR/slow-check-complete"
@@ -107,7 +107,7 @@ wait "$signal_sender"
 [ "$REFRESH_GENERATION" -eq 1 ]
 
 check_brew() { :; }
-# shellcheck disable=SC2329 # Overrides date calls in the sourced poller.
+# shellcheck disable=SC2317,SC2329 # Overrides date calls in the sourced poller.
 date() {
 	if [ "${1:-}" = "+%s" ]; then
 		printf '%s\n' 1234567890
@@ -125,7 +125,7 @@ unset -f date
 previous_token=$same_second_token_two
 atomic_source=''
 atomic_previous=''
-# shellcheck disable=SC2329 # Overrides the atomic rename in publish_complete.
+# shellcheck disable=SC2317,SC2329 # Overrides the atomic rename in publish_complete.
 mv() {
 	if [ "$#" -ne 3 ] || [ "$1" != "-f" ] || [ "$3" != "$COMPLETE_FILE" ]; then
 		return 1
@@ -146,7 +146,7 @@ atomic_token=$(cat "$COMPLETE_FILE")
 
 previous_generation=$COMPLETE_GENERATION
 failed_temp="$CACHE_DIR/.complete.$$.$((previous_generation + 1)).tmp"
-# shellcheck disable=SC2329 # Forces the publish_complete failure path.
+# shellcheck disable=SC2317,SC2329 # Forces the publish_complete failure path.
 mv() { return 1; }
 if publish_complete; then
 	printf 'completion publication unexpectedly succeeded\n' >&2
