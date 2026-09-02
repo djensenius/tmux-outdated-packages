@@ -7,11 +7,14 @@ WATCH_INTERVAL=5  # Check file changes every 5 seconds
 CHECK_TIMEOUT=120 # Timeout for each check in seconds
 DEBUG_MODE="${TMUX_OUTDATED_DEBUG:-0}"
 TIMEOUT_COMMAND=''
+COMPLETE_PROTOCOL_VERSION='v2'
 COMPLETE_GENERATION=0
 REFRESH_GENERATION=0
 APPLIED_REFRESH_GENERATION=0
 CYCLE_REFRESH_GENERATION=0
 CURRENT_FORCE_UPDATE=0
+RETRY_FAILED_CHECKS=0
+CHECK_FAILURE_STATUS=2
 LOG_FILE="$CACHE_DIR/poller.log"
 LOCK_DIR="$CACHE_DIR/poller.lock"
 LOCK_OWNER_FILE="$LOCK_DIR/pid"
@@ -51,6 +54,36 @@ resolve_timeout_command() {
 
 run_with_timeout() {
 	"$TIMEOUT_COMMAND" "$CHECK_TIMEOUT" "$@"
+}
+
+capture_check_output() {
+	local name=$1 allowed_status=$2 output status
+	shift 2
+	if output=$(run_with_timeout "$@" 2>/dev/null); then
+		status=0
+	else
+		status=$?
+	fi
+	if [ "$status" -ne 0 ]; then
+		if [ -n "$allowed_status" ] &&
+			[ "$status" -eq "$allowed_status" ] &&
+			[ -n "$output" ]; then
+			:
+		else
+			log_debug "$name: Check command failed (exit $status)"
+			return "$status"
+		fi
+	fi
+	printf '%s' "$output"
+}
+
+write_check_result() {
+	local name=$1 count=$2 output=$3
+	if ! printf '%s\n' "$count" > "$CACHE_DIR/$name.count" ||
+		! printf '%s\n' "$output" > "$CACHE_DIR/$name.list"; then
+		log_debug "$name: Unable to write check result"
+		return 1
+	fi
 }
 
 process_start_time() {
@@ -121,7 +154,7 @@ publish_complete() {
 		PROCESS_START_TIME=$(process_start_time "$$") || return 1
 	fi
 	next_generation=$((COMPLETE_GENERATION + 1))
-	token="$$:${PROCESS_START_TIME}:${next_generation}"
+	token="$COMPLETE_PROTOCOL_VERSION:$$:${PROCESS_START_TIME}:${next_generation}"
 	COMPLETE_TEMP="$CACHE_DIR/.complete.$$.${next_generation}.tmp"
 	if ! printf '%s\n' "$token" > "$COMPLETE_TEMP"; then
 		cleanup_complete_temp
@@ -199,7 +232,8 @@ handle_sigusr1() {
 
 begin_check_cycle() {
 	CYCLE_REFRESH_GENERATION=$REFRESH_GENERATION
-	if [ "$CYCLE_REFRESH_GENERATION" -gt "$APPLIED_REFRESH_GENERATION" ]; then
+	if [ "$CYCLE_REFRESH_GENERATION" -gt "$APPLIED_REFRESH_GENERATION" ] ||
+		[ "$RETRY_FAILED_CHECKS" -eq 1 ]; then
 		CURRENT_FORCE_UPDATE=1
 	else
 		CURRENT_FORCE_UPDATE=0
@@ -207,7 +241,7 @@ begin_check_cycle() {
 }
 
 complete_check_cycle() {
-	if [ "$CURRENT_FORCE_UPDATE" -eq 1 ]; then
+	if [ "$CYCLE_REFRESH_GENERATION" -gt "$APPLIED_REFRESH_GENERATION" ]; then
 		APPLIED_REFRESH_GENERATION=$CYCLE_REFRESH_GENERATION
 		if [ "$REFRESH_GENERATION" -eq "$CYCLE_REFRESH_GENERATION" ]; then
 			touch "$REFRESH_COMPLETE_FILE"
@@ -322,12 +356,11 @@ check_brew() {
 		local start
 		start=$(date +%s)
 		local output
-		output=$(run_with_timeout brew outdated --verbose 2>/dev/null)
+		output=$(capture_check_output brew '' brew outdated --verbose) || return
 		local count
 		count=$(echo "$output" | grep -c '[^[:space:]]' || echo "0")
 		local duration=$(($(date +%s) - start))
-		echo "$count" > "$CACHE_DIR/brew.count"
-		echo "$output" > "$CACHE_DIR/brew.list"
+		write_check_result brew "$count" "$output" || return
 		log_debug "brew: Found $count outdated packages (took ${duration}s)"
 	fi
 }
@@ -342,12 +375,11 @@ check_npm() {
 		local start
 		start=$(date +%s)
 		local output
-		output=$(run_with_timeout npm outdated -g 2>/dev/null)
+		output=$(capture_check_output npm 1 npm outdated -g) || return
 		local count
 		count=$(echo "$output" | tail -n +2 | wc -l | tr -d ' ')
 		local duration=$(($(date +%s) - start))
-		echo "$count" > "$CACHE_DIR/npm.count"
-		echo "$output" > "$CACHE_DIR/npm.list"
+		write_check_result npm "$count" "$output" || return
 		log_debug "npm: Found $count outdated packages (took ${duration}s)"
 	fi
 }
@@ -362,12 +394,11 @@ check_pip() {
 		local start
 		start=$(date +%s)
 		local output
-		output=$(run_with_timeout pip3 list --outdated 2>/dev/null)
+		output=$(capture_check_output pip '' pip3 list --outdated) || return
 		local count
 		count=$(echo "$output" | tail -n +3 | wc -l | tr -d ' ')
 		local duration=$(($(date +%s) - start))
-		echo "$count" > "$CACHE_DIR/pip.count"
-		echo "$output" > "$CACHE_DIR/pip.list"
+		write_check_result pip "$count" "$output" || return
 		log_debug "pip3: Found $count outdated packages (took ${duration}s)"
 	fi
 }
@@ -382,14 +413,13 @@ check_cargo() {
 		local start
 		start=$(date +%s)
 		local raw_output
-		raw_output=$(run_with_timeout cargo install-update --list 2>/dev/null)
+		raw_output=$(capture_check_output cargo '' cargo install-update --list) || return
 		local output
 		output=$(echo "$raw_output" | grep -E "Needs update|Yes[[:space:]]*$")
 		local count
 		count=$(echo "$output" | grep -c "Yes[[:space:]]*$" || echo "0")
 		local duration=$(($(date +%s) - start))
-		echo "$count" > "$CACHE_DIR/cargo.count"
-		echo "$output" > "$CACHE_DIR/cargo.list"
+		write_check_result cargo "$count" "$output" || return
 		log_debug "cargo: Found $count outdated packages (took ${duration}s)"
 	fi
 }
@@ -404,12 +434,11 @@ check_composer() {
 		local start
 		start=$(date +%s)
 		local output
-		output=$(run_with_timeout composer global outdated 2>/dev/null)
+		output=$(capture_check_output composer '' composer global outdated) || return
 		local count
 		count=$(echo "$output" | grep -c '^[a-z]' || echo "0")
 		local duration=$(($(date +%s) - start))
-		echo "$count" > "$CACHE_DIR/composer.count"
-		echo "$output" > "$CACHE_DIR/composer.list"
+		write_check_result composer "$count" "$output" || return
 		log_debug "composer: Found $count outdated packages (took ${duration}s)"
 	fi
 }
@@ -424,12 +453,11 @@ check_go() {
 		local start
 		start=$(date +%s)
 		local output
-		output=$(run_with_timeout go-global-update -n 2>/dev/null)
+		output=$(capture_check_output go '' go-global-update -n) || return
 		local count
 		count=$(echo "$output" | grep -c "outdated" || echo "0")
 		local duration=$(($(date +%s) - start))
-		echo "$count" > "$CACHE_DIR/go.count"
-		echo "$output" > "$CACHE_DIR/go.list"
+		write_check_result go "$count" "$output" || return
 		log_debug "go: Found $count outdated packages (took ${duration}s)"
 	fi
 }
@@ -445,12 +473,11 @@ check_apt() {
 			local start
 			start=$(date +%s)
 			local output
-			output=$(run_with_timeout apt list --upgradable 2>/dev/null)
+			output=$(capture_check_output apt '' apt list --upgradable) || return
 			local count
 			count=$(echo "$output" | grep -c "upgradable" || echo "0")
 			local duration=$(($(date +%s) - start))
-			echo "$count" > "$CACHE_DIR/apt.count"
-			echo "$output" > "$CACHE_DIR/apt.list"
+			write_check_result apt "$count" "$output" || return
 			log_debug "apt: Found $count outdated packages (took ${duration}s)"
 		fi
 	else
@@ -468,12 +495,11 @@ check_dnf() {
 		local start
 		start=$(date +%s)
 		local output
-		output=$(run_with_timeout dnf list --upgrades 2>/dev/null)
+		output=$(capture_check_output dnf '' dnf list --upgrades) || return
 		local count
 		count=$(echo "$output" | tail -n +2 | wc -l | tr -d ' ')
 		local duration=$(($(date +%s) - start))
-		echo "$count" > "$CACHE_DIR/dnf.count"
-		echo "$output" > "$CACHE_DIR/dnf.list"
+		write_check_result dnf "$count" "$output" || return
 		log_debug "dnf: Found $count outdated packages (took ${duration}s)"
 	fi
 }
@@ -491,7 +517,7 @@ check_mise() {
 		local start
 		start=$(date +%s)
 		local output
-		output=$(run_with_timeout mise outdated 2>/dev/null)
+		output=$(capture_check_output mise '' mise outdated) || return
 		local count=0
 		
 		if [[ "$output" != *"All tools are up to date"* ]] && [ -n "$output" ]; then
@@ -499,10 +525,8 @@ check_mise() {
 		else
 			output=""
 		fi
-		
 		local duration=$(($(date +%s) - start))
-		echo "$count" > "$CACHE_DIR/mise.count"
-		echo "$output" > "$CACHE_DIR/mise.list"
+		write_check_result mise "$count" "$output" || return
 		log_debug "mise: Found $count outdated packages (took ${duration}s)"
 	fi
 }
@@ -512,6 +536,7 @@ run_checks_parallel() {
 	local cycle_start
 	local pid
 	local pids=()
+	local child_status checks_failed=0
 	local sigusr1_wait_status wait_status
 	cycle_start=$(date +%s)
 	sigusr1_wait_status=$((128 + $(kill -l USR1)))
@@ -531,24 +556,50 @@ run_checks_parallel() {
 	# A trapped refresh signal interrupts wait. Retry only that status so
 	# ordinary checker failures are not mistaken for signal interruptions.
 	for pid in "${pids[@]}"; do
+		child_status=0
 		while true; do
 			if wait "$pid" 2>/dev/null; then
 				break
 			else
 				wait_status=$?
 			fi
-			[ "$wait_status" -eq "$sigusr1_wait_status" ] || break
+			if [ "$wait_status" -eq "$sigusr1_wait_status" ]; then
+				continue
+			fi
+			child_status=$wait_status
+			break
 		done
+		[ "$child_status" -eq 0 ] || checks_failed=1
 	done
+	if [ "$checks_failed" -ne 0 ]; then
+		RETRY_FAILED_CHECKS=1
+		log_debug "Check cycle failed; retaining the previous completed generation"
+		rm -f "$CHECKING_FILE"
+		return "$CHECK_FAILURE_STATUS"
+	fi
 	if ! publish_complete; then
 		log_debug "Unable to publish check cycle completion"
 		rm -f "$CHECKING_FILE"
 		return 1
 	fi
+	RETRY_FAILED_CHECKS=0
 	rm -f "$CHECKING_FILE"
 	
 	local cycle_duration=$(($(date +%s) - cycle_start))
 	log_debug "--- Check cycle complete (took ${cycle_duration}s) ---"
+}
+
+run_check_cycle() {
+	local status
+	begin_check_cycle
+	if run_checks_parallel; then
+		complete_check_cycle
+		return 0
+	else
+		status=$?
+	fi
+	[ "$status" -eq "$CHECK_FAILURE_STATUS" ] && return 0
+	return "$status"
 }
 
 cleanup() {
@@ -607,21 +658,13 @@ main() {
 	install_runtime_traps
 	
 	# Initial check
-	begin_check_cycle
-	if ! run_checks_parallel; then
-		return 1
-	fi
-	complete_check_cycle
+	run_check_cycle || return
 	
 	# Poll loop
 	while true; do
 		log_debug "Sleeping for ${WATCH_INTERVAL}s..."
 		sleep "$WATCH_INTERVAL"
-		begin_check_cycle
-		if ! run_checks_parallel; then
-			return 1
-		fi
-		complete_check_cycle
+		run_check_cycle || return
 	done
 }
 

@@ -79,6 +79,36 @@ hash -r
 [ ! -e "$REFRESH_COMPLETE_FILE" ]
 grep -q "neither 'timeout' nor 'gtimeout'" "$TEST_TMP/missing-timeout-startup.err"
 
+check_timeout="$TEST_TMP/check-timeout"
+# shellcheck disable=SC2016 # Writes a literal test script.
+printf '%s\n' \
+	'#!/bin/sh' \
+	'case "$2" in' \
+	'	success) printf "%s" success ;;' \
+	'	allowed) printf "%s" updates; exit 1 ;;' \
+	'	empty-allowed) exit 1 ;;' \
+	'	*) exit 124 ;;' \
+	'esac' > "$check_timeout"
+chmod +x "$check_timeout"
+TIMEOUT_COMMAND="$check_timeout"
+[ "$(capture_check_output test '' success)" = success ]
+[ "$(capture_check_output npm 1 allowed)" = updates ]
+capture_status=0
+if capture_check_output npm 1 empty-allowed >/dev/null; then
+	printf 'empty allowed-status output unexpectedly succeeded\n' >&2
+	exit 1
+else
+	capture_status=$?
+fi
+[ "$capture_status" -eq 1 ]
+if capture_check_output test '' failure >/dev/null; then
+	printf 'failed check command unexpectedly succeeded\n' >&2
+	exit 1
+else
+	capture_status=$?
+fi
+[ "$capture_status" -eq 124 ]
+
 : > "$REFRESH_COMPLETE_FILE"
 queue_sigusr1
 [ "$REFRESH_GENERATION" -eq 1 ]
@@ -91,6 +121,7 @@ check_brew() {
 	: > "$CACHE_DIR/slow-check-complete"
 }
 check_npm() { :; }
+# shellcheck disable=SC2317,SC2329 # Replaced dynamically by failure-path tests.
 check_pip() { :; }
 check_cargo() { :; }
 check_composer() { :; }
@@ -110,6 +141,13 @@ wait "$signal_sender"
 [ ! -e "$CHECKING_FILE" ]
 [ -f "$COMPLETE_FILE" ]
 [ -s "$COMPLETE_FILE" ]
+case "$(cat "$COMPLETE_FILE")" in
+	v2:*) ;;
+	*)
+		printf 'completion token does not use the success protocol\n' >&2
+		exit 1
+		;;
+esac
 [ "$REFRESH_GENERATION" -eq 1 ]
 
 check_brew() { :; }
@@ -128,7 +166,29 @@ same_second_token_two=$(cat "$COMPLETE_FILE")
 unset -f date
 [ "$same_second_token_one" != "$same_second_token_two" ]
 
-previous_token=$same_second_token_two
+# shellcheck disable=SC2317,SC2329 # Injects a checker failure.
+check_pip() { return 42; }
+failed_cycle_status=0
+if run_checks_parallel; then
+	printf 'failed checker cycle unexpectedly succeeded\n' >&2
+	exit 1
+else
+	failed_cycle_status=$?
+fi
+[ "$failed_cycle_status" -eq "$CHECK_FAILURE_STATUS" ]
+[ "$RETRY_FAILED_CHECKS" -eq 1 ]
+[ "$(cat "$COMPLETE_FILE")" = "$same_second_token_two" ]
+[ ! -e "$CHECKING_FILE" ]
+begin_check_cycle
+[ "$CURRENT_FORCE_UPDATE" -eq 1 ]
+# shellcheck disable=SC2317,SC2329 # Restores the successful checker.
+check_pip() { :; }
+run_checks_parallel
+[ "$RETRY_FAILED_CHECKS" -eq 0 ]
+recovery_token=$(cat "$COMPLETE_FILE")
+[ "$recovery_token" != "$same_second_token_two" ]
+
+previous_token=$recovery_token
 atomic_source=''
 atomic_previous=''
 # shellcheck disable=SC2317,SC2329 # Overrides the atomic rename in publish_complete.
@@ -208,8 +268,30 @@ for signal_case in INT:130 TERM:143; do
 	[ "$signal_status" -eq "$expected_status" ]
 done
 
+REFRESH_GENERATION=1
+APPLIED_REFRESH_GENERATION=0
+RETRY_FAILED_CHECKS=0
+rm -f "$REFRESH_COMPLETE_FILE"
+# shellcheck disable=SC2317,SC2329 # Injects a forced-refresh checker failure.
+check_pip() { return 42; }
+failed_refresh_token=$(cat "$COMPLETE_FILE")
+run_check_cycle
+[ "$APPLIED_REFRESH_GENERATION" -eq 0 ]
+[ "$RETRY_FAILED_CHECKS" -eq 1 ]
+[ "$(cat "$COMPLETE_FILE")" = "$failed_refresh_token" ]
+[ ! -e "$REFRESH_COMPLETE_FILE" ]
+# shellcheck disable=SC2317,SC2329 # Restores the successful checker.
+check_pip() { :; }
+run_check_cycle
+[ "$APPLIED_REFRESH_GENERATION" -eq 1 ]
+[ "$RETRY_FAILED_CHECKS" -eq 0 ]
+[ "$(cat "$COMPLETE_FILE")" != "$failed_refresh_token" ]
+[ -f "$REFRESH_COMPLETE_FILE" ]
+
 REFRESH_GENERATION=0
 APPLIED_REFRESH_GENERATION=0
+RETRY_FAILED_CHECKS=0
+rm -f "$REFRESH_COMPLETE_FILE"
 begin_check_cycle
 handle_sigusr1
 complete_check_cycle
