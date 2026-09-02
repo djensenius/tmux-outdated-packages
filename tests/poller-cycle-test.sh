@@ -51,7 +51,7 @@ if resolve_timeout_command 2> "$TEST_TMP/missing-timeout.err"; then
 	exit 1
 fi
 [ -z "$TIMEOUT_COMMAND" ]
-PATH=$original_path
+PATH="$original_path"
 hash -r
 grep -q "neither 'timeout' nor 'gtimeout'" "$TEST_TMP/missing-timeout.err"
 
@@ -62,7 +62,7 @@ if main 2> "$TEST_TMP/missing-timeout-startup.err"; then
 	printf 'poller startup unexpectedly succeeded without timeout support\n' >&2
 	exit 1
 fi
-PATH=$original_path
+PATH="$original_path"
 hash -r
 [ ! -e "$LOG_FILE" ]
 [ ! -e "$LOCK_DIR" ]
@@ -174,6 +174,33 @@ else
 	cleanup_status=$?
 fi
 [ "$cleanup_status" -eq 23 ]
+
+for signal_case in INT:130 TERM:143; do
+	signal_name=${signal_case%%:*}
+	expected_status=${signal_case##*:}
+	signal_status=0
+	if bash -c '
+		# shellcheck source=/dev/null
+		source "$1"
+		CACHE_DIR="$2"
+		LOG_FILE="$CACHE_DIR/poller.log"
+		LOCK_DIR="$CACHE_DIR/poller.lock"
+		LOCK_OWNER_FILE="$LOCK_DIR/pid"
+		PID_FILE="$CACHE_DIR/poller.pid"
+		CHECKING_FILE="$CACHE_DIR/checking"
+		COMPLETE_FILE="$CACHE_DIR/complete"
+		REFRESH_COMPLETE_FILE="$CACHE_DIR/refresh-complete"
+		install_runtime_traps
+		kill "-$3" "$$"
+		exit 99
+	' _ "$POLLER" "$TEST_TMP/signal-$signal_name" "$signal_name"; then
+		printf '%s trap unexpectedly succeeded\n' "$signal_name" >&2
+		exit 1
+	else
+		signal_status=$?
+	fi
+	[ "$signal_status" -eq "$expected_status" ]
+done
 
 REFRESH_GENERATION=0
 APPLIED_REFRESH_GENERATION=0

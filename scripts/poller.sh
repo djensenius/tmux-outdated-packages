@@ -175,6 +175,7 @@ release_lock() {
 }
 
 cleanup_startup() {
+	local status="${1:-130}"
 	if [ "$(awk 'NR == 1 { print; exit }' "$PID_FILE" 2>/dev/null)" = "$$" ]; then
 		rm -f "$PID_FILE"
 	fi
@@ -183,7 +184,7 @@ cleanup_startup() {
 	fi
 	cleanup_complete_temp
 	release_lock
-	exit 130
+	exit "$status"
 }
 
 queue_sigusr1() {
@@ -563,6 +564,12 @@ cleanup() {
 	exit "$status"
 }
 
+install_runtime_traps() {
+	trap 'cleanup $?' EXIT
+	trap 'exit 130' INT
+	trap 'exit 143' TERM
+}
+
 main() {
 	if ! resolve_timeout_command; then
 		return 1
@@ -574,7 +581,8 @@ main() {
 		log_debug "Poller lock is already held, exiting"
 		exit 0
 	fi
-	trap cleanup_startup INT TERM
+	trap 'cleanup_startup 130' INT
+	trap 'cleanup_startup 143' TERM
 	trap handle_sigusr1 SIGUSR1
 	if [ "$REFRESH_GENERATION" -gt "$APPLIED_REFRESH_GENERATION" ]; then
 		rm -f "$REFRESH_COMPLETE_FILE"
@@ -596,7 +604,7 @@ main() {
 	log_debug "PID file written: $PID_FILE"
 	
 	# Trap cleanup
-	trap 'cleanup $?' EXIT INT TERM
+	install_runtime_traps
 	
 	# Initial check
 	begin_check_cycle
