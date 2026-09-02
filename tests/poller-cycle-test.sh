@@ -29,9 +29,9 @@ printf '%s\n' '#!/bin/sh' 'printf "%s\n" gtimeout' > "$timeout_bin/gtimeout"
 printf '%s\n' '#!/bin/sh' 'printf "%s\n" gtimeout' > "$gtimeout_bin/gtimeout"
 chmod +x "$timeout_bin/timeout" "$timeout_bin/gtimeout" "$gtimeout_bin/gtimeout"
 
-# shellcheck disable=SC2329 # Deliberately shadows executable lookup.
+# shellcheck disable=SC2317,SC2329 # Deliberately shadows executable lookup.
 timeout() { printf '%s\n' shadowed-timeout; }
-# shellcheck disable=SC2329 # Deliberately shadows executable lookup.
+# shellcheck disable=SC2317,SC2329 # Deliberately shadows executable lookup.
 gtimeout() { printf '%s\n' shadowed-gtimeout; }
 
 PATH="$timeout_bin"
