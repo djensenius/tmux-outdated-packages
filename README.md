@@ -188,11 +188,16 @@ set -g @outdated_mouse_click 'off'
   after the newest pending refresh generation finishes. External clients can
   wait for that absent-to-present transition before reading the cache
 - `$TMPDIR/tmux-outdated-packages/complete` remains present after the first
-  completed cycle and retains its completion-time mtime semantics. Its content
-  is an opaque generation token that changes for every completed cycle, even
-  within the same second and across practical poller restarts. The marker is
-  atomically replaced, so readers can compare the token before and after reading
-  cached results to detect a concurrent completed cycle
+  successful cycle and retains its completion-time mtime semantics. Its content
+  begins with the `v2:` success-protocol version followed by a generation token
+  that changes for every successful cycle, even within the same second and
+  across practical poller restarts. Check results are staged privately and
+  promoted while the `checking` marker is present; the completion marker is
+  atomically replaced only after every attempted package check and promotion
+  succeeds. A failed or timed-out check discards the staged results, leaves the
+  previous generation in place, and is retried on the next cycle. Readers must
+  reject the cache while `checking` exists and compare the token before and after
+  reading cached results to detect a concurrent successful cycle
 - Checks are skipped if package directories haven't changed (smart mtime detection)
 - To manually trigger a check, remove the cache: `rm -rf $TMPDIR/tmux-outdated-packages`
 - To stop the poller: `pkill -f tmux-outdated-packages/scripts/poller.sh`

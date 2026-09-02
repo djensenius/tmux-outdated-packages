@@ -7,11 +7,14 @@ WATCH_INTERVAL=5  # Check file changes every 5 seconds
 CHECK_TIMEOUT=120 # Timeout for each check in seconds
 DEBUG_MODE="${TMUX_OUTDATED_DEBUG:-0}"
 TIMEOUT_COMMAND=''
+COMPLETE_PROTOCOL_VERSION='v2'
 COMPLETE_GENERATION=0
 REFRESH_GENERATION=0
 APPLIED_REFRESH_GENERATION=0
 CYCLE_REFRESH_GENERATION=0
 CURRENT_FORCE_UPDATE=0
+RETRY_FAILED_CHECKS=0
+CHECK_FAILURE_STATUS=2
 LOG_FILE="$CACHE_DIR/poller.log"
 LOCK_DIR="$CACHE_DIR/poller.lock"
 LOCK_OWNER_FILE="$LOCK_DIR/pid"
@@ -22,6 +25,10 @@ REFRESH_COMPLETE_FILE="$CACHE_DIR/refresh-complete"
 PROCESS_START_TIME=''
 PROCESS_RECORD_TEMP=''
 COMPLETE_TEMP=''
+COMPLETE_CANDIDATE_TOKEN=''
+CYCLE_CACHE_DIR=''
+CYCLE_BACKUP_DIR=''
+CYCLE_PROMOTION_ACTIVE=0
 
 # Package install directories for quick change detection
 BREW_CELLAR="${HOMEBREW_PREFIX:-/usr/local}/Cellar"
@@ -51,6 +58,40 @@ resolve_timeout_command() {
 
 run_with_timeout() {
 	"$TIMEOUT_COMMAND" "$CHECK_TIMEOUT" "$@"
+}
+
+capture_check_output() {
+	local name=$1 allowed_status=$2 output status
+	shift 2
+	if output=$(run_with_timeout "$@" 2>/dev/null); then
+		status=0
+	else
+		status=$?
+	fi
+	if [ "$status" -ne 0 ]; then
+		if [ -n "$allowed_status" ] &&
+			[ "$status" -eq "$allowed_status" ] &&
+			[ -n "$output" ]; then
+			:
+		else
+			log_debug "$name: Check command failed (exit $status)"
+			return "$status"
+		fi
+	fi
+	printf '%s' "$output"
+}
+
+write_check_result() {
+	local name=$1 count=$2 output=$3
+	if [ -z "$CYCLE_CACHE_DIR" ] || [ ! -d "$CYCLE_CACHE_DIR" ]; then
+		log_debug "$name: Check cycle staging directory is unavailable"
+		return 1
+	fi
+	if ! printf '%s\n' "$count" > "$CYCLE_CACHE_DIR/$name.count" ||
+		! printf '%s\n' "$output" > "$CYCLE_CACHE_DIR/$name.list"; then
+		log_debug "$name: Unable to write check result"
+		return 1
+	fi
 }
 
 process_start_time() {
@@ -115,24 +156,129 @@ cleanup_complete_temp() {
 	fi
 }
 
+cleanup_cycle_cache() {
+	if [ -n "$CYCLE_CACHE_DIR" ] && [ -d "$CYCLE_CACHE_DIR" ]; then
+		rm -rf "$CYCLE_CACHE_DIR"
+	fi
+	CYCLE_CACHE_DIR=''
+	CYCLE_BACKUP_DIR=''
+	CYCLE_PROMOTION_ACTIVE=0
+}
+
+rollback_cycle_outputs() {
+	local backup marker name failed=0
+	[ "$CYCLE_PROMOTION_ACTIVE" -eq 1 ] || return 0
+	for backup in "$CYCLE_BACKUP_DIR"/*.count "$CYCLE_BACKUP_DIR"/*.list; do
+		[ -f "$backup" ] || continue
+		name=${backup##*/}
+		mv -f "$backup" "$CACHE_DIR/$name" || failed=1
+	done
+	for marker in "$CYCLE_BACKUP_DIR"/*.missing; do
+		[ -f "$marker" ] || continue
+		name=${marker##*/}
+		rm -f "$CACHE_DIR/${name%.missing}" || failed=1
+	done
+	CYCLE_PROMOTION_ACTIVE=0
+	return "$failed"
+}
+
+cleanup_active_cycle() {
+	local published_token=''
+	if [ "$CYCLE_PROMOTION_ACTIVE" -eq 1 ]; then
+		if [ -n "$COMPLETE_CANDIDATE_TOKEN" ] && [ -f "$COMPLETE_FILE" ]; then
+			IFS= read -r published_token < "$COMPLETE_FILE" || true
+		fi
+		if [ "$published_token" = "$COMPLETE_CANDIDATE_TOKEN" ] &&
+			[ -n "$published_token" ]; then
+			CYCLE_PROMOTION_ACTIVE=0
+		elif ! rollback_cycle_outputs; then
+			log_debug "Unable to restore the previous completed generation"
+		fi
+	fi
+	COMPLETE_CANDIDATE_TOKEN=''
+	cleanup_cycle_cache
+}
+
+prepare_cycle_cache() {
+	cleanup_active_cycle
+	CYCLE_CACHE_DIR=$(mktemp -d "$CACHE_DIR/.cycle.$$.XXXXXX") || return 1
+	CYCLE_BACKUP_DIR="$CYCLE_CACHE_DIR/.backup"
+	if ! mkdir "$CYCLE_BACKUP_DIR"; then
+		cleanup_cycle_cache
+		return 1
+	fi
+}
+
+backup_cycle_outputs() {
+	local staged name live
+	for staged in "$CYCLE_CACHE_DIR"/*.count "$CYCLE_CACHE_DIR"/*.list; do
+		[ -f "$staged" ] || continue
+		name=${staged##*/}
+		live="$CACHE_DIR/$name"
+		if [ -e "$live" ]; then
+			cp -p "$live" "$CYCLE_BACKUP_DIR/$name" || return 1
+		else
+			: > "$CYCLE_BACKUP_DIR/$name.missing" || return 1
+		fi
+	done
+}
+
+promote_cycle_outputs() {
+	local staged name
+	CYCLE_PROMOTION_ACTIVE=1
+	for staged in "$CYCLE_CACHE_DIR"/*.count "$CYCLE_CACHE_DIR"/*.list; do
+		[ -f "$staged" ] || continue
+		name=${staged##*/}
+		mv -f "$staged" "$CACHE_DIR/$name" || return 1
+	done
+}
+
 publish_complete() {
 	local next_generation token
 	if [ -z "$PROCESS_START_TIME" ]; then
 		PROCESS_START_TIME=$(process_start_time "$$") || return 1
 	fi
 	next_generation=$((COMPLETE_GENERATION + 1))
-	token="$$:${PROCESS_START_TIME}:${next_generation}"
+	token="$COMPLETE_PROTOCOL_VERSION:$$:${PROCESS_START_TIME}:${next_generation}"
+	COMPLETE_CANDIDATE_TOKEN=$token
 	COMPLETE_TEMP="$CACHE_DIR/.complete.$$.${next_generation}.tmp"
 	if ! printf '%s\n' "$token" > "$COMPLETE_TEMP"; then
 		cleanup_complete_temp
+		COMPLETE_CANDIDATE_TOKEN=''
 		return 1
 	fi
 	if ! mv -f "$COMPLETE_TEMP" "$COMPLETE_FILE"; then
 		cleanup_complete_temp
+		COMPLETE_CANDIDATE_TOKEN=''
 		return 1
 	fi
 	COMPLETE_GENERATION=$next_generation
 	COMPLETE_TEMP=''
+}
+
+commit_cycle_outputs() {
+	COMPLETE_CANDIDATE_TOKEN=''
+	if ! backup_cycle_outputs; then
+		cleanup_cycle_cache
+		return 1
+	fi
+	if ! promote_cycle_outputs; then
+		if ! rollback_cycle_outputs; then
+			log_debug "Unable to restore cache after promotion failure"
+		fi
+		cleanup_cycle_cache
+		return 1
+	fi
+	if ! publish_complete; then
+		if ! rollback_cycle_outputs; then
+			log_debug "Unable to restore cache after completion publication failure"
+		fi
+		cleanup_cycle_cache
+		return 1
+	fi
+	CYCLE_PROMOTION_ACTIVE=0
+	COMPLETE_CANDIDATE_TOKEN=''
+	cleanup_cycle_cache
 }
 
 acquire_lock() {
@@ -182,6 +328,7 @@ cleanup_startup() {
 	if [ -n "$PROCESS_RECORD_TEMP" ]; then
 		rm -f "$PROCESS_RECORD_TEMP"
 	fi
+	cleanup_active_cycle
 	cleanup_complete_temp
 	release_lock
 	exit "$status"
@@ -199,7 +346,8 @@ handle_sigusr1() {
 
 begin_check_cycle() {
 	CYCLE_REFRESH_GENERATION=$REFRESH_GENERATION
-	if [ "$CYCLE_REFRESH_GENERATION" -gt "$APPLIED_REFRESH_GENERATION" ]; then
+	if [ "$CYCLE_REFRESH_GENERATION" -gt "$APPLIED_REFRESH_GENERATION" ] ||
+		[ "$RETRY_FAILED_CHECKS" -eq 1 ]; then
 		CURRENT_FORCE_UPDATE=1
 	else
 		CURRENT_FORCE_UPDATE=0
@@ -207,7 +355,7 @@ begin_check_cycle() {
 }
 
 complete_check_cycle() {
-	if [ "$CURRENT_FORCE_UPDATE" -eq 1 ]; then
+	if [ "$CYCLE_REFRESH_GENERATION" -gt "$APPLIED_REFRESH_GENERATION" ]; then
 		APPLIED_REFRESH_GENERATION=$CYCLE_REFRESH_GENERATION
 		if [ "$REFRESH_GENERATION" -eq "$CYCLE_REFRESH_GENERATION" ]; then
 			touch "$REFRESH_COMPLETE_FILE"
@@ -322,12 +470,11 @@ check_brew() {
 		local start
 		start=$(date +%s)
 		local output
-		output=$(run_with_timeout brew outdated --verbose 2>/dev/null)
+		output=$(capture_check_output brew '' brew outdated --verbose) || return
 		local count
 		count=$(echo "$output" | grep -c '[^[:space:]]' || echo "0")
 		local duration=$(($(date +%s) - start))
-		echo "$count" > "$CACHE_DIR/brew.count"
-		echo "$output" > "$CACHE_DIR/brew.list"
+		write_check_result brew "$count" "$output" || return
 		log_debug "brew: Found $count outdated packages (took ${duration}s)"
 	fi
 }
@@ -342,12 +489,11 @@ check_npm() {
 		local start
 		start=$(date +%s)
 		local output
-		output=$(run_with_timeout npm outdated -g 2>/dev/null)
+		output=$(capture_check_output npm 1 npm outdated -g) || return
 		local count
 		count=$(echo "$output" | tail -n +2 | wc -l | tr -d ' ')
 		local duration=$(($(date +%s) - start))
-		echo "$count" > "$CACHE_DIR/npm.count"
-		echo "$output" > "$CACHE_DIR/npm.list"
+		write_check_result npm "$count" "$output" || return
 		log_debug "npm: Found $count outdated packages (took ${duration}s)"
 	fi
 }
@@ -362,12 +508,11 @@ check_pip() {
 		local start
 		start=$(date +%s)
 		local output
-		output=$(run_with_timeout pip3 list --outdated 2>/dev/null)
+		output=$(capture_check_output pip '' pip3 list --outdated) || return
 		local count
 		count=$(echo "$output" | tail -n +3 | wc -l | tr -d ' ')
 		local duration=$(($(date +%s) - start))
-		echo "$count" > "$CACHE_DIR/pip.count"
-		echo "$output" > "$CACHE_DIR/pip.list"
+		write_check_result pip "$count" "$output" || return
 		log_debug "pip3: Found $count outdated packages (took ${duration}s)"
 	fi
 }
@@ -382,14 +527,13 @@ check_cargo() {
 		local start
 		start=$(date +%s)
 		local raw_output
-		raw_output=$(run_with_timeout cargo install-update --list 2>/dev/null)
+		raw_output=$(capture_check_output cargo '' cargo install-update --list) || return
 		local output
 		output=$(echo "$raw_output" | grep -E "Needs update|Yes[[:space:]]*$")
 		local count
 		count=$(echo "$output" | grep -c "Yes[[:space:]]*$" || echo "0")
 		local duration=$(($(date +%s) - start))
-		echo "$count" > "$CACHE_DIR/cargo.count"
-		echo "$output" > "$CACHE_DIR/cargo.list"
+		write_check_result cargo "$count" "$output" || return
 		log_debug "cargo: Found $count outdated packages (took ${duration}s)"
 	fi
 }
@@ -404,12 +548,11 @@ check_composer() {
 		local start
 		start=$(date +%s)
 		local output
-		output=$(run_with_timeout composer global outdated 2>/dev/null)
+		output=$(capture_check_output composer '' composer global outdated) || return
 		local count
 		count=$(echo "$output" | grep -c '^[a-z]' || echo "0")
 		local duration=$(($(date +%s) - start))
-		echo "$count" > "$CACHE_DIR/composer.count"
-		echo "$output" > "$CACHE_DIR/composer.list"
+		write_check_result composer "$count" "$output" || return
 		log_debug "composer: Found $count outdated packages (took ${duration}s)"
 	fi
 }
@@ -424,12 +567,11 @@ check_go() {
 		local start
 		start=$(date +%s)
 		local output
-		output=$(run_with_timeout go-global-update -n 2>/dev/null)
+		output=$(capture_check_output go '' go-global-update -n) || return
 		local count
 		count=$(echo "$output" | grep -c "outdated" || echo "0")
 		local duration=$(($(date +%s) - start))
-		echo "$count" > "$CACHE_DIR/go.count"
-		echo "$output" > "$CACHE_DIR/go.list"
+		write_check_result go "$count" "$output" || return
 		log_debug "go: Found $count outdated packages (took ${duration}s)"
 	fi
 }
@@ -445,12 +587,11 @@ check_apt() {
 			local start
 			start=$(date +%s)
 			local output
-			output=$(run_with_timeout apt list --upgradable 2>/dev/null)
+			output=$(capture_check_output apt '' apt list --upgradable) || return
 			local count
 			count=$(echo "$output" | grep -c "upgradable" || echo "0")
 			local duration=$(($(date +%s) - start))
-			echo "$count" > "$CACHE_DIR/apt.count"
-			echo "$output" > "$CACHE_DIR/apt.list"
+			write_check_result apt "$count" "$output" || return
 			log_debug "apt: Found $count outdated packages (took ${duration}s)"
 		fi
 	else
@@ -468,12 +609,11 @@ check_dnf() {
 		local start
 		start=$(date +%s)
 		local output
-		output=$(run_with_timeout dnf list --upgrades 2>/dev/null)
+		output=$(capture_check_output dnf '' dnf list --upgrades) || return
 		local count
 		count=$(echo "$output" | tail -n +2 | wc -l | tr -d ' ')
 		local duration=$(($(date +%s) - start))
-		echo "$count" > "$CACHE_DIR/dnf.count"
-		echo "$output" > "$CACHE_DIR/dnf.list"
+		write_check_result dnf "$count" "$output" || return
 		log_debug "dnf: Found $count outdated packages (took ${duration}s)"
 	fi
 }
@@ -491,7 +631,7 @@ check_mise() {
 		local start
 		start=$(date +%s)
 		local output
-		output=$(run_with_timeout mise outdated 2>/dev/null)
+		output=$(capture_check_output mise '' mise outdated) || return
 		local count=0
 		
 		if [[ "$output" != *"All tools are up to date"* ]] && [ -n "$output" ]; then
@@ -499,10 +639,8 @@ check_mise() {
 		else
 			output=""
 		fi
-		
 		local duration=$(($(date +%s) - start))
-		echo "$count" > "$CACHE_DIR/mise.count"
-		echo "$output" > "$CACHE_DIR/mise.list"
+		write_check_result mise "$count" "$output" || return
 		log_debug "mise: Found $count outdated packages (took ${duration}s)"
 	fi
 }
@@ -512,10 +650,14 @@ run_checks_parallel() {
 	local cycle_start
 	local pid
 	local pids=()
+	local child_status checks_failed=0
 	local sigusr1_wait_status wait_status
 	cycle_start=$(date +%s)
 	sigusr1_wait_status=$((128 + $(kill -l USR1)))
-	: > "$CHECKING_FILE"
+	if ! prepare_cycle_cache || ! : > "$CHECKING_FILE"; then
+		cleanup_active_cycle
+		return 1
+	fi
 	
 	# Run all checks in parallel background jobs
 	check_brew & pids+=("$!")
@@ -531,24 +673,51 @@ run_checks_parallel() {
 	# A trapped refresh signal interrupts wait. Retry only that status so
 	# ordinary checker failures are not mistaken for signal interruptions.
 	for pid in "${pids[@]}"; do
+		child_status=0
 		while true; do
 			if wait "$pid" 2>/dev/null; then
 				break
 			else
 				wait_status=$?
 			fi
-			[ "$wait_status" -eq "$sigusr1_wait_status" ] || break
+			if [ "$wait_status" -eq "$sigusr1_wait_status" ]; then
+				continue
+			fi
+			child_status=$wait_status
+			break
 		done
+		[ "$child_status" -eq 0 ] || checks_failed=1
 	done
-	if ! publish_complete; then
+	if [ "$checks_failed" -ne 0 ]; then
+		RETRY_FAILED_CHECKS=1
+		log_debug "Check cycle failed; retaining the previous completed generation"
+		cleanup_cycle_cache
+		rm -f "$CHECKING_FILE"
+		return "$CHECK_FAILURE_STATUS"
+	fi
+	if ! commit_cycle_outputs; then
 		log_debug "Unable to publish check cycle completion"
 		rm -f "$CHECKING_FILE"
 		return 1
 	fi
+	RETRY_FAILED_CHECKS=0
 	rm -f "$CHECKING_FILE"
 	
 	local cycle_duration=$(($(date +%s) - cycle_start))
 	log_debug "--- Check cycle complete (took ${cycle_duration}s) ---"
+}
+
+run_check_cycle() {
+	local status
+	begin_check_cycle
+	if run_checks_parallel; then
+		complete_check_cycle
+		return 0
+	else
+		status=$?
+	fi
+	[ "$status" -eq "$CHECK_FAILURE_STATUS" ] && return 0
+	return "$status"
 }
 
 cleanup() {
@@ -559,6 +728,7 @@ cleanup() {
 		rm -f "$PID_FILE"
 	fi
 	rm -f "$CHECKING_FILE"
+	cleanup_active_cycle
 	cleanup_complete_temp
 	release_lock
 	exit "$status"
@@ -607,21 +777,13 @@ main() {
 	install_runtime_traps
 	
 	# Initial check
-	begin_check_cycle
-	if ! run_checks_parallel; then
-		return 1
-	fi
-	complete_check_cycle
+	run_check_cycle || return
 	
 	# Poll loop
 	while true; do
 		log_debug "Sleeping for ${WATCH_INTERVAL}s..."
 		sleep "$WATCH_INTERVAL"
-		begin_check_cycle
-		if ! run_checks_parallel; then
-			return 1
-		fi
-		complete_check_cycle
+		run_check_cycle || return
 	done
 }
 
