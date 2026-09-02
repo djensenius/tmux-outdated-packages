@@ -172,6 +172,8 @@ set -g @outdated_mouse_click 'off'
 - tmux 2.1 or higher
 - Nerdfonts for proper icon display
 - Package managers you want to check (brew, npm, pip3, gem, cargo)
+- `timeout` or `gtimeout` from GNU coreutils. The poller prefers `timeout` and
+  falls back to `gtimeout`; on macOS, install it with `brew install coreutils`
 
 ## Notes
 
@@ -185,6 +187,12 @@ set -g @outdated_mouse_click 'off'
   `$TMPDIR/tmux-outdated-packages/refresh-complete`; the poller recreates it only
   after the newest pending refresh generation finishes. External clients can
   wait for that absent-to-present transition before reading the cache
+- `$TMPDIR/tmux-outdated-packages/complete` remains present after the first
+  completed cycle and retains its completion-time mtime semantics. Its content
+  is an opaque generation token that changes for every completed cycle, even
+  within the same second and across practical poller restarts. The marker is
+  atomically replaced, so readers can compare the token before and after reading
+  cached results to detect a concurrent completed cycle
 - Checks are skipped if package directories haven't changed (smart mtime detection)
 - To manually trigger a check, remove the cache: `rm -rf $TMPDIR/tmux-outdated-packages`
 - To stop the poller: `pkill -f tmux-outdated-packages/scripts/poller.sh`
