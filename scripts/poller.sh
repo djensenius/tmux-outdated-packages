@@ -25,6 +25,10 @@ REFRESH_COMPLETE_FILE="$CACHE_DIR/refresh-complete"
 PROCESS_START_TIME=''
 PROCESS_RECORD_TEMP=''
 COMPLETE_TEMP=''
+COMPLETE_CANDIDATE_TOKEN=''
+CYCLE_CACHE_DIR=''
+CYCLE_BACKUP_DIR=''
+CYCLE_PROMOTION_ACTIVE=0
 
 # Package install directories for quick change detection
 BREW_CELLAR="${HOMEBREW_PREFIX:-/usr/local}/Cellar"
@@ -79,8 +83,12 @@ capture_check_output() {
 
 write_check_result() {
 	local name=$1 count=$2 output=$3
-	if ! printf '%s\n' "$count" > "$CACHE_DIR/$name.count" ||
-		! printf '%s\n' "$output" > "$CACHE_DIR/$name.list"; then
+	if [ -z "$CYCLE_CACHE_DIR" ] || [ ! -d "$CYCLE_CACHE_DIR" ]; then
+		log_debug "$name: Check cycle staging directory is unavailable"
+		return 1
+	fi
+	if ! printf '%s\n' "$count" > "$CYCLE_CACHE_DIR/$name.count" ||
+		! printf '%s\n' "$output" > "$CYCLE_CACHE_DIR/$name.list"; then
 		log_debug "$name: Unable to write check result"
 		return 1
 	fi
@@ -148,6 +156,83 @@ cleanup_complete_temp() {
 	fi
 }
 
+cleanup_cycle_cache() {
+	if [ -n "$CYCLE_CACHE_DIR" ] && [ -d "$CYCLE_CACHE_DIR" ]; then
+		rm -rf "$CYCLE_CACHE_DIR"
+	fi
+	CYCLE_CACHE_DIR=''
+	CYCLE_BACKUP_DIR=''
+	CYCLE_PROMOTION_ACTIVE=0
+}
+
+rollback_cycle_outputs() {
+	local backup marker name failed=0
+	[ "$CYCLE_PROMOTION_ACTIVE" -eq 1 ] || return 0
+	for backup in "$CYCLE_BACKUP_DIR"/*.count "$CYCLE_BACKUP_DIR"/*.list; do
+		[ -f "$backup" ] || continue
+		name=${backup##*/}
+		mv -f "$backup" "$CACHE_DIR/$name" || failed=1
+	done
+	for marker in "$CYCLE_BACKUP_DIR"/*.missing; do
+		[ -f "$marker" ] || continue
+		name=${marker##*/}
+		rm -f "$CACHE_DIR/${name%.missing}" || failed=1
+	done
+	CYCLE_PROMOTION_ACTIVE=0
+	return "$failed"
+}
+
+cleanup_active_cycle() {
+	local published_token=''
+	if [ "$CYCLE_PROMOTION_ACTIVE" -eq 1 ]; then
+		if [ -n "$COMPLETE_CANDIDATE_TOKEN" ] && [ -f "$COMPLETE_FILE" ]; then
+			IFS= read -r published_token < "$COMPLETE_FILE" || true
+		fi
+		if [ "$published_token" = "$COMPLETE_CANDIDATE_TOKEN" ] &&
+			[ -n "$published_token" ]; then
+			CYCLE_PROMOTION_ACTIVE=0
+		elif ! rollback_cycle_outputs; then
+			log_debug "Unable to restore the previous completed generation"
+		fi
+	fi
+	COMPLETE_CANDIDATE_TOKEN=''
+	cleanup_cycle_cache
+}
+
+prepare_cycle_cache() {
+	cleanup_active_cycle
+	CYCLE_CACHE_DIR=$(mktemp -d "$CACHE_DIR/.cycle.$$.XXXXXX") || return 1
+	CYCLE_BACKUP_DIR="$CYCLE_CACHE_DIR/.backup"
+	if ! mkdir "$CYCLE_BACKUP_DIR"; then
+		cleanup_cycle_cache
+		return 1
+	fi
+}
+
+backup_cycle_outputs() {
+	local staged name live
+	for staged in "$CYCLE_CACHE_DIR"/*.count "$CYCLE_CACHE_DIR"/*.list; do
+		[ -f "$staged" ] || continue
+		name=${staged##*/}
+		live="$CACHE_DIR/$name"
+		if [ -e "$live" ]; then
+			cp -p "$live" "$CYCLE_BACKUP_DIR/$name" || return 1
+		else
+			: > "$CYCLE_BACKUP_DIR/$name.missing" || return 1
+		fi
+	done
+}
+
+promote_cycle_outputs() {
+	local staged name
+	CYCLE_PROMOTION_ACTIVE=1
+	for staged in "$CYCLE_CACHE_DIR"/*.count "$CYCLE_CACHE_DIR"/*.list; do
+		[ -f "$staged" ] || continue
+		name=${staged##*/}
+		mv -f "$staged" "$CACHE_DIR/$name" || return 1
+	done
+}
+
 publish_complete() {
 	local next_generation token
 	if [ -z "$PROCESS_START_TIME" ]; then
@@ -155,17 +240,45 @@ publish_complete() {
 	fi
 	next_generation=$((COMPLETE_GENERATION + 1))
 	token="$COMPLETE_PROTOCOL_VERSION:$$:${PROCESS_START_TIME}:${next_generation}"
+	COMPLETE_CANDIDATE_TOKEN=$token
 	COMPLETE_TEMP="$CACHE_DIR/.complete.$$.${next_generation}.tmp"
 	if ! printf '%s\n' "$token" > "$COMPLETE_TEMP"; then
 		cleanup_complete_temp
+		COMPLETE_CANDIDATE_TOKEN=''
 		return 1
 	fi
 	if ! mv -f "$COMPLETE_TEMP" "$COMPLETE_FILE"; then
 		cleanup_complete_temp
+		COMPLETE_CANDIDATE_TOKEN=''
 		return 1
 	fi
 	COMPLETE_GENERATION=$next_generation
 	COMPLETE_TEMP=''
+}
+
+commit_cycle_outputs() {
+	COMPLETE_CANDIDATE_TOKEN=''
+	if ! backup_cycle_outputs; then
+		cleanup_cycle_cache
+		return 1
+	fi
+	if ! promote_cycle_outputs; then
+		if ! rollback_cycle_outputs; then
+			log_debug "Unable to restore cache after promotion failure"
+		fi
+		cleanup_cycle_cache
+		return 1
+	fi
+	if ! publish_complete; then
+		if ! rollback_cycle_outputs; then
+			log_debug "Unable to restore cache after completion publication failure"
+		fi
+		cleanup_cycle_cache
+		return 1
+	fi
+	CYCLE_PROMOTION_ACTIVE=0
+	COMPLETE_CANDIDATE_TOKEN=''
+	cleanup_cycle_cache
 }
 
 acquire_lock() {
@@ -215,6 +328,7 @@ cleanup_startup() {
 	if [ -n "$PROCESS_RECORD_TEMP" ]; then
 		rm -f "$PROCESS_RECORD_TEMP"
 	fi
+	cleanup_active_cycle
 	cleanup_complete_temp
 	release_lock
 	exit "$status"
@@ -540,7 +654,10 @@ run_checks_parallel() {
 	local sigusr1_wait_status wait_status
 	cycle_start=$(date +%s)
 	sigusr1_wait_status=$((128 + $(kill -l USR1)))
-	: > "$CHECKING_FILE"
+	if ! prepare_cycle_cache || ! : > "$CHECKING_FILE"; then
+		cleanup_active_cycle
+		return 1
+	fi
 	
 	# Run all checks in parallel background jobs
 	check_brew & pids+=("$!")
@@ -574,10 +691,11 @@ run_checks_parallel() {
 	if [ "$checks_failed" -ne 0 ]; then
 		RETRY_FAILED_CHECKS=1
 		log_debug "Check cycle failed; retaining the previous completed generation"
+		cleanup_cycle_cache
 		rm -f "$CHECKING_FILE"
 		return "$CHECK_FAILURE_STATUS"
 	fi
-	if ! publish_complete; then
+	if ! commit_cycle_outputs; then
 		log_debug "Unable to publish check cycle completion"
 		rm -f "$CHECKING_FILE"
 		return 1
@@ -610,6 +728,7 @@ cleanup() {
 		rm -f "$PID_FILE"
 	fi
 	rm -f "$CHECKING_FILE"
+	cleanup_active_cycle
 	cleanup_complete_temp
 	release_lock
 	exit "$status"

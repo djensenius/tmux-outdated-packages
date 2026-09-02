@@ -1,5 +1,12 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -eEuo pipefail
+
+# shellcheck disable=SC2317,SC2329 # Invoked by the ERR trap.
+report_failure() {
+	printf 'poller-cycle-test: failed at line %s (exit %s)\n' "$2" "$1" >&2
+	exit "$1"
+}
+trap 'report_failure "$?" "$LINENO"' ERR
 
 ROOT_DIR=$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 POLLER="$ROOT_DIR/scripts/poller.sh"
@@ -150,6 +157,7 @@ case "$(cat "$COMPLETE_FILE")" in
 esac
 [ "$REFRESH_GENERATION" -eq 1 ]
 
+# shellcheck disable=SC2317,SC2329 # Replaces the slow checker after signal coverage.
 check_brew() { :; }
 # shellcheck disable=SC2317,SC2329 # Overrides date calls in the sourced poller.
 date() {
@@ -168,6 +176,10 @@ unset -f date
 
 # shellcheck disable=SC2317,SC2329 # Injects a checker failure.
 check_pip() { return 42; }
+# shellcheck disable=SC2317,SC2329 # Stages a sibling result before the failure.
+check_brew() { write_check_result brew 2 new-package; }
+printf '1\n' > "$CACHE_DIR/brew.count"
+printf 'old-package\n' > "$CACHE_DIR/brew.list"
 failed_cycle_status=0
 if run_checks_parallel; then
 	printf 'failed checker cycle unexpectedly succeeded\n' >&2
@@ -178,7 +190,10 @@ fi
 [ "$failed_cycle_status" -eq "$CHECK_FAILURE_STATUS" ]
 [ "$RETRY_FAILED_CHECKS" -eq 1 ]
 [ "$(cat "$COMPLETE_FILE")" = "$same_second_token_two" ]
+[ "$(cat "$CACHE_DIR/brew.count")" = 1 ]
+[ "$(cat "$CACHE_DIR/brew.list")" = old-package ]
 [ ! -e "$CHECKING_FILE" ]
+[ -z "$(find "$CACHE_DIR" -maxdepth 1 -type d -name '.cycle.*' -print -quit)" ]
 begin_check_cycle
 [ "$CURRENT_FORCE_UPDATE" -eq 1 ]
 # shellcheck disable=SC2317,SC2329 # Restores the successful checker.
@@ -187,6 +202,8 @@ run_checks_parallel
 [ "$RETRY_FAILED_CHECKS" -eq 0 ]
 recovery_token=$(cat "$COMPLETE_FILE")
 [ "$recovery_token" != "$same_second_token_two" ]
+[ "$(cat "$CACHE_DIR/brew.count")" = 2 ]
+[ "$(cat "$CACHE_DIR/brew.list")" = new-package ]
 
 previous_token=$recovery_token
 atomic_source=''
@@ -212,8 +229,17 @@ atomic_token=$(cat "$COMPLETE_FILE")
 
 previous_generation=$COMPLETE_GENERATION
 failed_temp="$CACHE_DIR/.complete.$$.$((previous_generation + 1)).tmp"
-# shellcheck disable=SC2317,SC2329 # Forces the publish_complete failure path.
-mv() { return 1; }
+# shellcheck disable=SC2317,SC2329 # Stages a result before publication fails.
+check_brew() { write_check_result brew 3 unpublished-package; }
+published_brew_count=$(cat "$CACHE_DIR/brew.count")
+published_brew_list=$(cat "$CACHE_DIR/brew.list")
+# shellcheck disable=SC2317,SC2329 # Fails only completion publication.
+mv() {
+	if [ "$#" -eq 3 ] && [ "$1" = "-f" ] && [ "$3" = "$COMPLETE_FILE" ]; then
+		return 1
+	fi
+	command mv "$@"
+}
 if run_checks_parallel; then
 	printf 'completion publication unexpectedly succeeded\n' >&2
 	exit 1
@@ -221,9 +247,15 @@ fi
 unset -f mv
 [ "$COMPLETE_GENERATION" -eq "$previous_generation" ]
 [ "$(cat "$COMPLETE_FILE")" = "$atomic_token" ]
+[ "$(cat "$CACHE_DIR/brew.count")" = "$published_brew_count" ]
+[ "$(cat "$CACHE_DIR/brew.list")" = "$published_brew_list" ]
 [ ! -e "$failed_temp" ]
 [ ! -e "$CHECKING_FILE" ]
 [ -z "$COMPLETE_TEMP" ]
+[ -z "$COMPLETE_CANDIDATE_TOKEN" ]
+[ -z "$(find "$CACHE_DIR" -maxdepth 1 -type d -name '.cycle.*' -print -quit)" ]
+# shellcheck disable=SC2317,SC2329 # Later tests do not need staged output.
+check_brew() { :; }
 
 COMPLETE_TEMP="$CACHE_DIR/.complete.cleanup.tmp"
 : > "$COMPLETE_TEMP"
