@@ -41,8 +41,8 @@ log_debug() {
 }
 
 resolve_timeout_command() {
-	TIMEOUT_COMMAND=$(command -v timeout 2>/dev/null) && return 0
-	TIMEOUT_COMMAND=$(command -v gtimeout 2>/dev/null) && return 0
+	TIMEOUT_COMMAND=$(type -P timeout 2>/dev/null) && return 0
+	TIMEOUT_COMMAND=$(type -P gtimeout 2>/dev/null) && return 0
 	TIMEOUT_COMMAND=''
 	printf '%s\n' \
 		"tmux-outdated-packages: neither 'timeout' nor 'gtimeout' is available; install GNU coreutils (brew install coreutils on macOS)." >&2

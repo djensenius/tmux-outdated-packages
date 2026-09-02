@@ -29,6 +29,11 @@ printf '%s\n' '#!/bin/sh' 'printf "%s\n" gtimeout' > "$timeout_bin/gtimeout"
 printf '%s\n' '#!/bin/sh' 'printf "%s\n" gtimeout' > "$gtimeout_bin/gtimeout"
 chmod +x "$timeout_bin/timeout" "$timeout_bin/gtimeout" "$gtimeout_bin/gtimeout"
 
+# shellcheck disable=SC2329 # Deliberately shadows executable lookup.
+timeout() { printf '%s\n' shadowed-timeout; }
+# shellcheck disable=SC2329 # Deliberately shadows executable lookup.
+gtimeout() { printf '%s\n' shadowed-gtimeout; }
+
 PATH="$timeout_bin"
 hash -r
 TIMEOUT_COMMAND=''
@@ -42,6 +47,7 @@ TIMEOUT_COMMAND=''
 resolve_timeout_command
 [ "$TIMEOUT_COMMAND" = "$gtimeout_bin/gtimeout" ]
 [ "$(run_with_timeout package-check)" = gtimeout ]
+unset -f timeout gtimeout
 
 PATH="$missing_timeout_bin"
 hash -r
