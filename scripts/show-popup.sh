@@ -56,7 +56,10 @@ herdr_update_outdated_plugins() {
     while IFS= read -r plugin; do
         [ -n "$plugin" ] || continue
         found=1
-        if [[ ! "$plugin" =~ ^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$ ]]; then
+        # GitHub owner/repo only: the owner starts with a letter or digit, and
+        # the repo is not "." or "..", so a cache entry cannot name a path.
+        if [[ ! "$plugin" =~ ^[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9._-]+$ ]] ||
+            [ "${plugin#*/}" = . ] || [ "${plugin#*/}" = .. ]; then
             echo "Skipping invalid Herdr plugin name: $plugin"
             failed=1
             continue

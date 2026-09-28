@@ -188,6 +188,15 @@ unset NPM_OUTDATED_MODE
 assert_no_cache_files pi
 
 reset_cache
+export NPM_OUTDATED_MODE=invalid
+if check_pi; then
+	printf '%s\n' 'Malformed Pi npm output was accepted' >&2
+	exit 1
+fi
+unset NPM_OUTDATED_MODE
+assert_no_cache_files pi
+
+reset_cache
 export NPM_OUTDATED_MODE=package-named-error
 check_pi
 unset NPM_OUTDATED_MODE
@@ -289,6 +298,9 @@ export UPDATE_LOG="$update_log"
 printf '%s\n' \
 	'owner/old-plugin aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa -> cccccccccccccccccccccccccccccccccccccccc' \
 	'bad;name aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa -> cccccccccccccccccccccccccccccccccccccccc' \
+	'../escape aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa -> cccccccccccccccccccccccccccccccccccccccc' \
+	'owner/.. aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa -> cccccccccccccccccccccccccccccccccccccccc' \
+	'-flag/repo aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa -> cccccccccccccccccccccccccccccccccccccccc' \
 	'owner/fail-plugin dddddddddddddddddddddddddddddddddddddddd -> eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee' \
 	'owner/new-plugin ffffffffffffffffffffffffffffffffffffffff -> 1111111111111111111111111111111111111111' \
 	>"$update_cache/herdr.list"
@@ -306,7 +318,7 @@ fi
 grep -q '^herdr plugin install owner/old-plugin --yes$' "$update_log"
 grep -q '^herdr plugin install owner/fail-plugin --yes$' "$update_log"
 grep -q '^herdr plugin install owner/new-plugin --yes$' "$update_log"
-if grep -q 'bad;name' "$update_log"; then
+if grep -q -e 'bad;name' -e 'install \.\./escape' -e 'install owner/\.\. ' -e 'install -flag' "$update_log"; then
 	printf '%s\n' 'Herdr update helper installed an invalid plugin name' >&2
 	exit 1
 fi
