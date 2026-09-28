@@ -10,62 +10,74 @@ source "$CURRENT_DIR/icons.sh"
 
 format_output() {
 	local output=""
-	
+
 	# Read individual cache files and format output
 	[ -f "$CACHE_DIR/brew.count" ] && {
 		local count
 		count=$(cat "$CACHE_DIR/brew.count")
 		[ "$count" -gt 0 ] && output+=" ${BREW_ICON} ${count}"
 	}
-	
+
 	[ -f "$CACHE_DIR/npm.count" ] && {
 		local count
 		count=$(cat "$CACHE_DIR/npm.count")
 		[ "$count" -gt 0 ] && output+=" ${NPM_ICON} ${count}"
 	}
-	
+
+	[ -f "$CACHE_DIR/pi.count" ] && {
+		local count
+		count=$(cat "$CACHE_DIR/pi.count")
+		[ "$count" -gt 0 ] && output+=" ${PI_ICON} ${count}"
+	}
+
 	[ -f "$CACHE_DIR/pip.count" ] && {
 		local count
 		count=$(cat "$CACHE_DIR/pip.count")
 		[ "$count" -gt 0 ] && output+=" ${PIP_ICON} ${count}"
 	}
-	
+
 	[ -f "$CACHE_DIR/cargo.count" ] && {
 		local count
 		count=$(cat "$CACHE_DIR/cargo.count")
 		[ "$count" -gt 0 ] && output+=" ${CARGO_ICON} ${count}"
 	}
-	
+
 	[ -f "$CACHE_DIR/composer.count" ] && {
 		local count
 		count=$(cat "$CACHE_DIR/composer.count")
 		[ "$count" -gt 0 ] && output+=" ${COMPOSER_ICON} ${count}"
 	}
-	
+
 	[ -f "$CACHE_DIR/go.count" ] && {
 		local count
 		count=$(cat "$CACHE_DIR/go.count")
 		[ "$count" -gt 0 ] && output+=" ${GO_ICON} ${count}"
 	}
-	
+
 	[ -f "$CACHE_DIR/apt.count" ] && {
 		local count
 		count=$(cat "$CACHE_DIR/apt.count")
 		[ "$count" -gt 0 ] && output+=" ${APT_ICON} ${count}"
 	}
-	
+
 	[ -f "$CACHE_DIR/dnf.count" ] && {
 		local count
 		count=$(cat "$CACHE_DIR/dnf.count")
 		[ "$count" -gt 0 ] && output+=" ${DNF_ICON} ${count}"
 	}
-	
+
 	[ -f "$CACHE_DIR/mise.count" ] && {
 		local count
 		count=$(cat "$CACHE_DIR/mise.count")
 		[ "$count" -gt 0 ] && output+=" ${MISE_ICON} ${count}"
 	}
-	
+
+	[ -f "$CACHE_DIR/herdr.count" ] && {
+		local count
+		count=$(cat "$CACHE_DIR/herdr.count")
+		[ "$count" -gt 0 ] && output+=" ${HERDR_ICON} ${count}"
+	}
+
 	echo "$output"
 }
 

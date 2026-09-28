@@ -10,6 +10,7 @@ source "$CURRENT_DIR/icons.sh"
 # ANSI colour codes
 BOLD=$'\033[1m'
 DIM=$'\033[2m'
+RED=$'\033[31m'
 GREEN=$'\033[32m'
 YELLOW=$'\033[33m'
 BLUE=$'\033[34m'
@@ -46,6 +47,33 @@ pip_upgrade_all() {
     done
 }
 
+herdr_update_outdated_plugins() {
+    local list_file="$CACHE_DIR/herdr.list" plugin found=0 failed=0
+    if [ ! -f "$list_file" ]; then
+        echo "No Herdr plugin list found"
+        return 1
+    fi
+    while IFS= read -r plugin; do
+        [ -n "$plugin" ] || continue
+        found=1
+        # GitHub owner/repo only: the owner starts with a letter or digit, and
+        # the repo is not "." or "..", so a cache entry cannot name a path.
+        if [[ ! "$plugin" =~ ^[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9._-]+$ ]] ||
+            [ "${plugin#*/}" = . ] || [ "${plugin#*/}" = .. ]; then
+            echo "Skipping invalid Herdr plugin name: $plugin"
+            failed=1
+            continue
+        fi
+        echo "${BOLD}Reinstalling ${plugin}...${RESET}"
+        herdr plugin install "$plugin" --yes </dev/null || failed=1
+    done < <(awk '{ print $1 }' "$list_file")
+    if [ "$found" -eq 0 ]; then
+        echo "No plugins to update"
+        return 0
+    fi
+    return "$failed"
+}
+
 # Collect outdated managers
 declare -a mgr_icons=()
 declare -a mgr_names=()
@@ -72,12 +100,14 @@ add_manager() {
 
 add_manager "$BREW_ICON"     "Homebrew"  "brew.count"     "brew upgrade"            "brew.list"     "$GREEN"
 add_manager "$NPM_ICON"      "npm"       "npm.count"      "npm update -g"           "npm.list"      "$YELLOW"
+add_manager "$PI_ICON"       "Pi"        "pi.count"       "pi update --extensions" "pi.list"       "$MAGENTA"
 add_manager "$CARGO_ICON"    "Cargo"     "cargo.count"    "cargo install-update -a" "cargo.list"    "$YELLOW"
 add_manager "$COMPOSER_ICON" "Composer"  "composer.count"  "composer global update" "composer.list" "$MAGENTA"
 add_manager "$GO_ICON"       "Go"        "go.count"       "go-global-update"        "go.list"       "$CYAN"
 add_manager "$APT_ICON"      "Apt"       "apt.count"      "sudo apt upgrade"        "apt.list"      "$GREEN"
 add_manager "$DNF_ICON"      "DNF"       "dnf.count"      "sudo dnf upgrade"        "dnf.list"      "$BLUE"
 add_manager "$MISE_ICON"     "Mise"      "mise.count"     "mise upgrade"            "mise.list"     "$MAGENTA"
+add_manager "$HERDR_ICON"    "Herdr"     "herdr.count"    "herdr_update_outdated_plugins" "herdr.list" "$CYAN"
 add_manager "$PIP_ICON"      "pip"       "pip.count"      "pip_upgrade_all"         "pip.list"      "$BLUE"
 
 total=${#mgr_names[@]}
@@ -148,6 +178,7 @@ while true; do
     echo ""
     echo -n "  ${BOLD}❯ ${RESET}"
     read -r choice
+    update_failed=0
 
     case "$choice" in
         q|Q|"")
@@ -161,12 +192,21 @@ while true; do
                     echo "  ${BOLD}${CYAN}▶ Updating ${mgr_names[$i]}...${RESET}"
                     echo "  ${DIM}Running: ${mgr_commands[$i]}${RESET}"
                     echo ""
-                    eval "${mgr_commands[$i]}"
-                    echo ""
-                    echo "  ${GREEN}✓ ${mgr_names[$i]} done${RESET}"
+                    if eval "${mgr_commands[$i]}"; then
+                        echo ""
+                        echo "  ${GREEN}✓ ${mgr_names[$i]} done${RESET}"
+                    else
+                        update_failed=1
+                        echo ""
+                        echo "  ${RED}✗ ${mgr_names[$i]} failed${RESET}"
+                    fi
                 done
                 echo ""
-                echo "  ${GREEN}${BOLD}✨ All updates complete!${RESET}"
+                if [ "$update_failed" -eq 0 ]; then
+                    echo "  ${GREEN}${BOLD}✨ All updates complete!${RESET}"
+                else
+                    echo "  ${RED}${BOLD}Some updates failed; see the output above.${RESET}"
+                fi
                 "$CURRENT_DIR/trigger-refresh.sh" 2>/dev/null
                 echo ""
                 echo "  ${DIM}Press any key to continue...${RESET}"
@@ -180,9 +220,14 @@ while true; do
                 echo "  ${BOLD}${CYAN}▶ Updating ${mgr_names[$idx]}...${RESET}"
                 echo "  ${DIM}Running: ${mgr_commands[$idx]}${RESET}"
                 echo ""
-                eval "${mgr_commands[$idx]}"
-                echo ""
-                echo "  ${GREEN}✓ ${mgr_names[$idx]} done${RESET}"
+                if eval "${mgr_commands[$idx]}"; then
+                    echo ""
+                    echo "  ${GREEN}✓ ${mgr_names[$idx]} done${RESET}"
+                else
+                    update_failed=1
+                    echo ""
+                    echo "  ${RED}✗ ${mgr_names[$idx]} failed${RESET}"
+                fi
                 "$CURRENT_DIR/trigger-refresh.sh" 2>/dev/null
                 echo ""
                 echo "  ${DIM}Press any key to continue...${RESET}"

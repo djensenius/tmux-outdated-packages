@@ -32,6 +32,33 @@ pip_upgrade_all() {
     done
 }
 
+herdr_update_outdated_plugins() {
+    local list_file="$CACHE_DIR/herdr.list" plugin found=0 failed=0
+    if [ ! -f "$list_file" ]; then
+        echo "No Herdr plugin list found"
+        return 1
+    fi
+    while IFS= read -r plugin; do
+        [ -n "$plugin" ] || continue
+        found=1
+        # GitHub owner/repo only: the owner starts with a letter or digit, and
+        # the repo is not "." or "..", so a cache entry cannot name a path.
+        if [[ ! "$plugin" =~ ^[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9._-]+$ ]] ||
+            [ "${plugin#*/}" = . ] || [ "${plugin#*/}" = .. ]; then
+            echo "Skipping invalid Herdr plugin name: $plugin"
+            failed=1
+            continue
+        fi
+        echo "${BOLD}Reinstalling ${plugin}...${RESET}"
+        herdr plugin install "$plugin" --yes </dev/null || failed=1
+    done < <(awk '{ print $1 }' "$list_file")
+    if [ "$found" -eq 0 ]; then
+        echo "No plugins to update"
+        return 0
+    fi
+    return "$failed"
+}
+
 # Collect outdated managers into arrays
 declare -a manager_names=()
 declare -a manager_counts=()
@@ -54,12 +81,14 @@ check_manager() {
 
 check_manager "Homebrew"  "brew.count"     "brew upgrade"             "brew.list"
 check_manager "npm"       "npm.count"      "npm update -g"            "npm.list"
+check_manager "Pi"        "pi.count"       "pi update --extensions"  "pi.list"
 check_manager "Cargo"     "cargo.count"    "cargo install-update -a"  "cargo.list"
 check_manager "Composer"  "composer.count"  "composer global update"  "composer.list"
 check_manager "Go"        "go.count"       "go-global-update"         "go.list"
 check_manager "apt"       "apt.count"      "sudo apt upgrade"         "apt.list"
 check_manager "DNF"       "dnf.count"      "sudo dnf upgrade"         "dnf.list"
 check_manager "Mise"      "mise.count"     "mise upgrade"             "mise.list"
+check_manager "Herdr"     "herdr.count"    "herdr_update_outdated_plugins" "herdr.list"
 check_manager "pip"       "pip.count"      "pip_upgrade_all"          "pip.list"
 
 total=${#manager_names[@]}
@@ -100,6 +129,7 @@ while true; do
     echo -ne "${BOLD}Select an option: ${RESET}"
 
     read -r choice
+    update_failed=0
 
     case "$choice" in
         q|Q)
@@ -112,12 +142,21 @@ while true; do
                     echo "${BOLD}${CYAN}▶ Updating ${manager_names[$i]}...${RESET}"
                     echo "${DIM}Running: ${manager_commands[$i]}${RESET}"
                     echo ""
-                    eval "${manager_commands[$i]}"
-                    echo ""
-                    echo "${GREEN}✓ ${manager_names[$i]} done${RESET}"
+                    if eval "${manager_commands[$i]}"; then
+                        echo ""
+                        echo "${GREEN}✓ ${manager_names[$i]} done${RESET}"
+                    else
+                        update_failed=1
+                        echo ""
+                        echo "${RED}✗ ${manager_names[$i]} failed${RESET}"
+                    fi
                 done
                 echo ""
-                echo "${GREEN}${BOLD}✨ All updates complete!${RESET}"
+                if [ "$update_failed" -eq 0 ]; then
+                    echo "${GREEN}${BOLD}✨ All updates complete!${RESET}"
+                else
+                    echo "${RED}${BOLD}Some updates failed; see the output above.${RESET}"
+                fi
                 # Trigger a refresh of the cache
                 "$CURRENT_DIR/trigger-refresh.sh" 2>/dev/null
                 echo "${DIM}Press any key to continue...${RESET}"
@@ -131,9 +170,14 @@ while true; do
                 echo "${BOLD}${CYAN}▶ Updating ${manager_names[$idx]}...${RESET}"
                 echo "${DIM}Running: ${manager_commands[$idx]}${RESET}"
                 echo ""
-                eval "${manager_commands[$idx]}"
-                echo ""
-                echo "${GREEN}✓ ${manager_names[$idx]} done${RESET}"
+                if eval "${manager_commands[$idx]}"; then
+                    echo ""
+                    echo "${GREEN}✓ ${manager_names[$idx]} done${RESET}"
+                else
+                    update_failed=1
+                    echo ""
+                    echo "${RED}✗ ${manager_names[$idx]} failed${RESET}"
+                fi
                 # Trigger a refresh of the cache
                 "$CURRENT_DIR/trigger-refresh.sh" 2>/dev/null
                 echo "${DIM}Press any key to continue...${RESET}"

@@ -40,6 +40,9 @@ if [ -n "$NPM_PREFIX" ]; then
 fi
 PIP_SITE="$(python3 -m site --user-site 2>/dev/null || true)"
 CARGO_BIN="${CARGO_HOME:-$HOME/.cargo}/bin"
+PI_AGENT_DIR="${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}"
+PI_NPM_PREFIX="$PI_AGENT_DIR/npm"
+HERDR_PLUGIN_DIR="${HERDR_CONFIG_DIR:-$HOME/.config/herdr}/plugins"
 
 log_debug() {
 	if [ "$DEBUG_MODE" = "1" ]; then
@@ -618,6 +621,130 @@ check_dnf() {
 	fi
 }
 
+
+check_pi() {
+	if ! command -v pi &> /dev/null || ! command -v npm &> /dev/null || ! command -v node &> /dev/null; then
+		log_debug "pi: Not installed or npm/node missing, skipping"
+		return
+	fi
+	if [ ! -d "$PI_NPM_PREFIX" ]; then
+		log_debug "pi: npm prefix not found at $PI_NPM_PREFIX, skipping"
+		return
+	fi
+
+	if should_check "pi" "$PI_NPM_PREFIX"; then
+		local start
+		start=$(date +%s)
+		local raw_output
+		raw_output=$(cd "$PI_NPM_PREFIX" && capture_check_output pi 1 npm outdated --json) || return
+		local output
+		# shellcheck disable=SC2016 # JavaScript program is passed literally to node.
+		output=$(printf '%s' "$raw_output" | node -e '
+const chunks = [];
+process.stdin.on("data", chunk => chunks.push(chunk));
+process.stdin.on("end", () => {
+  const input = Buffer.concat(chunks).toString().trim();
+  if (!input) {
+    return;
+  }
+
+  let data;
+  try {
+    data = JSON.parse(input);
+  } catch (_err) {
+    process.exitCode = 1;
+    return;
+  }
+
+  // npm reports failures as {"error": {"code": ..., "summary": ...}}. A real
+  // package named "error" has current/wanted/latest instead, so keep it.
+  const npmError = data && typeof data === "object" && !Array.isArray(data) ? data.error : undefined;
+  const isNpmError = npmError && typeof npmError === "object" &&
+    !("current" in npmError) && !("wanted" in npmError) && !("latest" in npmError) &&
+    ("code" in npmError || "summary" in npmError || "detail" in npmError);
+  if (!data || typeof data !== "object" || Array.isArray(data) || isNpmError) {
+    process.exitCode = 1;
+    return;
+  }
+
+  for (const [name, info] of Object.entries(data)) {
+    if (!info || typeof info !== "object" || Array.isArray(info)) {
+      continue;
+    }
+    const current = info.current;
+    const latest = info.latest || info.wanted;
+    if (!current || !latest) {
+      continue;
+    }
+    console.log(`${name} ${current} -> ${latest}`);
+  }
+});
+') || return
+		local count=0
+		if [ -n "$output" ]; then
+			count=$(printf '%s\n' "$output" | grep -c '[^[:space:]]')
+		fi
+		local duration=$(($(date +%s) - start))
+		write_check_result pi "$count" "$output" || return
+		log_debug "pi: Found $count outdated packages (took ${duration}s)"
+	fi
+}
+
+check_herdr() {
+	if ! command -v herdr &> /dev/null || ! command -v git &> /dev/null; then
+		log_debug "herdr: Not installed or git missing, skipping"
+		return
+	fi
+
+	if should_check "herdr" "$HERDR_PLUGIN_DIR"; then
+		local start
+		start=$(date +%s)
+		local output
+		# shellcheck disable=SC2016 # Helper script is passed literally to bash -c.
+		output=$(capture_check_output herdr '' bash -c '
+set -uo pipefail
+log_file=${1:-}
+debug_mode=${2:-0}
+log_skip() {
+  [ "$debug_mode" = "1" ] || return 0
+  [ -n "$log_file" ] || return 0
+  { printf "[%s] herdr: %s\n" "$(date "+%Y-%m-%d %H:%M:%S")" "$*" >> "$log_file"; } 2>/dev/null || true
+}
+
+plugin_list=$(herdr plugin list) || exit
+while IFS= read -r line; do
+  repo=$(printf "%s\n" "$line" | sed -nE "s/.*\[github:([^]@]+)@([0-9a-fA-F]{40})\].*/\1/p")
+  installed=$(printf "%s\n" "$line" | sed -nE "s/.*\[github:([^]@]+)@([0-9a-fA-F]{40})\].*/\2/p")
+  [ -n "$repo" ] && [ -n "$installed" ] || continue
+  if ! remote_output=$(GIT_TERMINAL_PROMPT=0 git ls-remote "https://github.com/$repo" HEAD); then
+    log_skip "Skipping $repo because git ls-remote failed"
+    continue
+  fi
+  remote=$(printf "%s\n" "$remote_output" | awk "NR == 1 { print \$1; exit }")
+  case "$remote" in
+    [0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F]) ;;
+    *)
+      log_skip "Skipping $repo because git ls-remote returned an unexpected HEAD"
+      continue
+      ;;
+  esac
+  installed=$(printf "%s" "$installed" | tr "[:upper:]" "[:lower:]")
+  remote=$(printf "%s" "$remote" | tr "[:upper:]" "[:lower:]")
+  if [ "$installed" != "$remote" ]; then
+    printf "%s %s -> %s\n" "$repo" "$installed" "$remote"
+  fi
+done <<<"$plugin_list"
+' _ "$LOG_FILE" "$DEBUG_MODE") || return
+		local count=0
+		if [ -n "$output" ]; then
+			count=$(printf '%s\n' "$output" | grep -c '[^[:space:]]')
+		fi
+		local duration=$(($(date +%s) - start))
+		write_check_result herdr "$count" "$output" || return
+		log_debug "herdr: Found $count outdated plugins (took ${duration}s)"
+	fi
+}
+
 check_mise() {
 	if ! command -v mise &> /dev/null; then
 		log_debug "mise: Not installed, skipping"
@@ -669,6 +796,8 @@ run_checks_parallel() {
 	check_apt & pids+=("$!")
 	check_dnf & pids+=("$!")
 	check_mise & pids+=("$!")
+	check_pi & pids+=("$!")
+	check_herdr & pids+=("$!")
 	
 	# A trapped refresh signal interrupts wait. Retry only that status so
 	# ordinary checker failures are not mistaken for signal interruptions.

@@ -136,6 +136,8 @@ check_go() { :; }
 check_apt() { :; }
 check_dnf() { :; }
 check_mise() { :; }
+check_pi() { :; }
+check_herdr() { :; }
 
 trap handle_sigusr1 USR1
 (sleep 0.1; kill -USR1 "$$") &
