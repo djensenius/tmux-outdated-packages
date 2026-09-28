@@ -10,6 +10,7 @@ source "$CURRENT_DIR/icons.sh"
 # ANSI colour codes
 BOLD=$'\033[1m'
 DIM=$'\033[2m'
+RED=$'\033[31m'
 GREEN=$'\033[32m'
 YELLOW=$'\033[33m'
 BLUE=$'\033[34m'
@@ -174,6 +175,7 @@ while true; do
     echo ""
     echo -n "  ${BOLD}❯ ${RESET}"
     read -r choice
+    update_failed=0
 
     case "$choice" in
         q|Q|"")
@@ -187,12 +189,21 @@ while true; do
                     echo "  ${BOLD}${CYAN}▶ Updating ${mgr_names[$i]}...${RESET}"
                     echo "  ${DIM}Running: ${mgr_commands[$i]}${RESET}"
                     echo ""
-                    eval "${mgr_commands[$i]}"
-                    echo ""
-                    echo "  ${GREEN}✓ ${mgr_names[$i]} done${RESET}"
+                    if eval "${mgr_commands[$i]}"; then
+                        echo ""
+                        echo "  ${GREEN}✓ ${mgr_names[$i]} done${RESET}"
+                    else
+                        update_failed=1
+                        echo ""
+                        echo "  ${RED}✗ ${mgr_names[$i]} failed${RESET}"
+                    fi
                 done
                 echo ""
-                echo "  ${GREEN}${BOLD}✨ All updates complete!${RESET}"
+                if [ "$update_failed" -eq 0 ]; then
+                    echo "  ${GREEN}${BOLD}✨ All updates complete!${RESET}"
+                else
+                    echo "  ${RED}${BOLD}Some updates failed; see the output above.${RESET}"
+                fi
                 "$CURRENT_DIR/trigger-refresh.sh" 2>/dev/null
                 echo ""
                 echo "  ${DIM}Press any key to continue...${RESET}"
@@ -206,9 +217,14 @@ while true; do
                 echo "  ${BOLD}${CYAN}▶ Updating ${mgr_names[$idx]}...${RESET}"
                 echo "  ${DIM}Running: ${mgr_commands[$idx]}${RESET}"
                 echo ""
-                eval "${mgr_commands[$idx]}"
-                echo ""
-                echo "  ${GREEN}✓ ${mgr_names[$idx]} done${RESET}"
+                if eval "${mgr_commands[$idx]}"; then
+                    echo ""
+                    echo "  ${GREEN}✓ ${mgr_names[$idx]} done${RESET}"
+                else
+                    update_failed=1
+                    echo ""
+                    echo "  ${RED}✗ ${mgr_names[$idx]} failed${RESET}"
+                fi
                 "$CURRENT_DIR/trigger-refresh.sh" 2>/dev/null
                 echo ""
                 echo "  ${DIM}Press any key to continue...${RESET}"

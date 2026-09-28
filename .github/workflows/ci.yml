@@ -28,3 +28,6 @@ jobs:
         run: |
           tests/poller-lock-test.sh
           tests/poller-cycle-test.sh
+
+      - name: Test Pi and Herdr managers
+        run: tests/pi-herdr-manager-test.sh

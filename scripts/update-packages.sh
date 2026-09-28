@@ -126,6 +126,7 @@ while true; do
     echo -ne "${BOLD}Select an option: ${RESET}"
 
     read -r choice
+    update_failed=0
 
     case "$choice" in
         q|Q)
@@ -138,12 +139,21 @@ while true; do
                     echo "${BOLD}${CYAN}▶ Updating ${manager_names[$i]}...${RESET}"
                     echo "${DIM}Running: ${manager_commands[$i]}${RESET}"
                     echo ""
-                    eval "${manager_commands[$i]}"
-                    echo ""
-                    echo "${GREEN}✓ ${manager_names[$i]} done${RESET}"
+                    if eval "${manager_commands[$i]}"; then
+                        echo ""
+                        echo "${GREEN}✓ ${manager_names[$i]} done${RESET}"
+                    else
+                        update_failed=1
+                        echo ""
+                        echo "${RED}✗ ${manager_names[$i]} failed${RESET}"
+                    fi
                 done
                 echo ""
-                echo "${GREEN}${BOLD}✨ All updates complete!${RESET}"
+                if [ "$update_failed" -eq 0 ]; then
+                    echo "${GREEN}${BOLD}✨ All updates complete!${RESET}"
+                else
+                    echo "${RED}${BOLD}Some updates failed; see the output above.${RESET}"
+                fi
                 # Trigger a refresh of the cache
                 "$CURRENT_DIR/trigger-refresh.sh" 2>/dev/null
                 echo "${DIM}Press any key to continue...${RESET}"
@@ -157,9 +167,14 @@ while true; do
                 echo "${BOLD}${CYAN}▶ Updating ${manager_names[$idx]}...${RESET}"
                 echo "${DIM}Running: ${manager_commands[$idx]}${RESET}"
                 echo ""
-                eval "${manager_commands[$idx]}"
-                echo ""
-                echo "${GREEN}✓ ${manager_names[$idx]} done${RESET}"
+                if eval "${manager_commands[$idx]}"; then
+                    echo ""
+                    echo "${GREEN}✓ ${manager_names[$idx]} done${RESET}"
+                else
+                    update_failed=1
+                    echo ""
+                    echo "${RED}✗ ${manager_names[$idx]} failed${RESET}"
+                fi
                 # Trigger a refresh of the cache
                 "$CURRENT_DIR/trigger-refresh.sh" 2>/dev/null
                 echo "${DIM}Press any key to continue...${RESET}"
