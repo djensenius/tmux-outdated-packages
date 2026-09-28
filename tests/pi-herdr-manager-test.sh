@@ -199,7 +199,7 @@ grep -Fxq 'error 1.0.0 -> 1.1.0' "$CACHE_DIR/pi.list"
 
 reset_cache
 mkdir -p "$TEST_TMP/missing-pi-bin"
-PATH="$TEST_TMP/missing-pi-bin:/bin" check_pi
+PATH="$TEST_TMP/missing-pi-bin" check_pi
 assert_no_cache_files pi
 
 reset_cache
@@ -207,7 +207,7 @@ missing_npm_bin="$TEST_TMP/missing-npm-bin"
 mkdir -p "$missing_npm_bin"
 cp "$TEST_TMP/bin/pi" "$missing_npm_bin/pi"
 cp "$TEST_TMP/bin/node" "$missing_npm_bin/node"
-PATH="$missing_npm_bin:/bin" check_pi
+PATH="$missing_npm_bin" check_pi
 assert_no_cache_files pi
 
 reset_cache
@@ -215,7 +215,7 @@ missing_node_bin="$TEST_TMP/missing-node-bin"
 mkdir -p "$missing_node_bin"
 cp "$TEST_TMP/bin/pi" "$missing_node_bin/pi"
 cp "$TEST_TMP/bin/npm" "$missing_node_bin/npm"
-PATH="$missing_node_bin:/bin" check_pi
+PATH="$missing_node_bin" check_pi
 assert_no_cache_files pi
 
 reset_cache
@@ -261,14 +261,14 @@ assert_no_cache_files herdr
 
 reset_cache
 mkdir -p "$TEST_TMP/missing-herdr-bin"
-PATH="$TEST_TMP/missing-herdr-bin:/bin" check_herdr
+PATH="$TEST_TMP/missing-herdr-bin" check_herdr
 assert_no_cache_files herdr
 
 reset_cache
 missing_git_bin="$TEST_TMP/missing-git-bin"
 mkdir -p "$missing_git_bin"
 cp "$TEST_TMP/bin/herdr" "$missing_git_bin/herdr"
-PATH="$missing_git_bin:/bin" check_herdr
+PATH="$missing_git_bin" check_herdr
 assert_no_cache_files herdr
 
 update_cache="$TEST_TMP/update-cache"
