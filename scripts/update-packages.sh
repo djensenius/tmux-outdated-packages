@@ -32,6 +32,25 @@ pip_upgrade_all() {
     done
 }
 
+herdr_update_outdated_plugins() {
+    local list_file="$CACHE_DIR/herdr.list"
+    if [ ! -f "$list_file" ]; then
+        echo "No Herdr plugin list found"
+        return 1
+    fi
+    local plugins
+    plugins=$(awk '{ print $1 }' "$list_file")
+    if [ -z "$plugins" ]; then
+        echo "No plugins to update"
+        return 0
+    fi
+    echo "$plugins" | while IFS= read -r plugin; do
+        [ -n "$plugin" ] || continue
+        echo "${BOLD}Reinstalling ${plugin}...${RESET}"
+        herdr plugin install "$plugin" --yes
+    done
+}
+
 # Collect outdated managers into arrays
 declare -a manager_names=()
 declare -a manager_counts=()
@@ -54,12 +73,14 @@ check_manager() {
 
 check_manager "Homebrew"  "brew.count"     "brew upgrade"             "brew.list"
 check_manager "npm"       "npm.count"      "npm update -g"            "npm.list"
+check_manager "Pi"        "pi.count"       "pi update --extensions"  "pi.list"
 check_manager "Cargo"     "cargo.count"    "cargo install-update -a"  "cargo.list"
 check_manager "Composer"  "composer.count"  "composer global update"  "composer.list"
 check_manager "Go"        "go.count"       "go-global-update"         "go.list"
 check_manager "apt"       "apt.count"      "sudo apt upgrade"         "apt.list"
 check_manager "DNF"       "dnf.count"      "sudo dnf upgrade"         "dnf.list"
 check_manager "Mise"      "mise.count"     "mise upgrade"             "mise.list"
+check_manager "Herdr"     "herdr.count"    "herdr_update_outdated_plugins" "herdr.list"
 check_manager "pip"       "pip.count"      "pip_upgrade_all"          "pip.list"
 
 total=${#manager_names[@]}

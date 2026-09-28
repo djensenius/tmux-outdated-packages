@@ -46,6 +46,25 @@ pip_upgrade_all() {
     done
 }
 
+herdr_update_outdated_plugins() {
+    local list_file="$CACHE_DIR/herdr.list"
+    if [ ! -f "$list_file" ]; then
+        echo "No Herdr plugin list found"
+        return 1
+    fi
+    local plugins
+    plugins=$(awk '{ print $1 }' "$list_file")
+    if [ -z "$plugins" ]; then
+        echo "No plugins to update"
+        return 0
+    fi
+    echo "$plugins" | while IFS= read -r plugin; do
+        [ -n "$plugin" ] || continue
+        echo "${BOLD}Reinstalling ${plugin}...${RESET}"
+        herdr plugin install "$plugin" --yes
+    done
+}
+
 # Collect outdated managers
 declare -a mgr_icons=()
 declare -a mgr_names=()
@@ -72,12 +91,14 @@ add_manager() {
 
 add_manager "$BREW_ICON"     "Homebrew"  "brew.count"     "brew upgrade"            "brew.list"     "$GREEN"
 add_manager "$NPM_ICON"      "npm"       "npm.count"      "npm update -g"           "npm.list"      "$YELLOW"
+add_manager "$PI_ICON"       "Pi"        "pi.count"       "pi update --extensions" "pi.list"       "$MAGENTA"
 add_manager "$CARGO_ICON"    "Cargo"     "cargo.count"    "cargo install-update -a" "cargo.list"    "$YELLOW"
 add_manager "$COMPOSER_ICON" "Composer"  "composer.count"  "composer global update" "composer.list" "$MAGENTA"
 add_manager "$GO_ICON"       "Go"        "go.count"       "go-global-update"        "go.list"       "$CYAN"
 add_manager "$APT_ICON"      "Apt"       "apt.count"      "sudo apt upgrade"        "apt.list"      "$GREEN"
 add_manager "$DNF_ICON"      "DNF"       "dnf.count"      "sudo dnf upgrade"        "dnf.list"      "$BLUE"
 add_manager "$MISE_ICON"     "Mise"      "mise.count"     "mise upgrade"            "mise.list"     "$MAGENTA"
+add_manager "$HERDR_ICON"    "Herdr"     "herdr.count"    "herdr_update_outdated_plugins" "herdr.list" "$CYAN"
 add_manager "$PIP_ICON"      "pip"       "pip.count"      "pip_upgrade_all"         "pip.list"      "$BLUE"
 
 total=${#mgr_names[@]}

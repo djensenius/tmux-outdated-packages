@@ -22,6 +22,10 @@ export DNF_ICON
 DNF_ICON=$(printf '\uf30d')   # Fedora icon
 export MISE_ICON
 MISE_ICON=$(printf '\uf0ad')  # Wrench icon for mise
+export PI_ICON
+PI_ICON=$(printf '\uf315')    # Raspberry Pi icon
+export HERDR_ICON
+HERDR_ICON=$(printf '\uf0c0') # Users icon for Herdr plugins
 
 # Alternative: Use emojis instead (uncomment to use)
 # export BREW_ICON="🍺"
@@ -33,3 +37,5 @@ MISE_ICON=$(printf '\uf0ad')  # Wrench icon for mise
 # export GO_ICON="🐹"
 # export APT_ICON="📦"
 # export DNF_ICON="📦"
+# export PI_ICON="🥧"
+# export HERDR_ICON="🐑"

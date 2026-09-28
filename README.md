@@ -13,6 +13,7 @@ _Screenshots using [Catppuccin](https://github.com/catppuccin/catppuccin) theme.
 - Shows outdated package counts for:
   - 🍺 Homebrew (`brew`)
   - 󰎙 npm global packages (`npm -g`)
+  - 󰐗 Pi packages in `${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}/npm` (`pi`)
   -  pip/pip3
   -  Ruby gems
   -  Rust cargo packages (requires `cargo-install-update`)
@@ -20,6 +21,7 @@ _Screenshots using [Catppuccin](https://github.com/catppuccin/catppuccin) theme.
   -  Go packages (requires `go-global-update`)
   -  APT packages (Debian/Ubuntu)
   -  DNF packages (Fedora/RHEL)
+  -  Herdr plugins installed from GitHub (`herdr plugin list`)
 - Only displays when outdated packages are present
 - Uses nerdfonts icons for a clean look
 - Integrates with Catppuccin theme
@@ -171,7 +173,7 @@ set -g @outdated_mouse_click 'off'
 
 - tmux 2.1 or higher
 - Nerdfonts for proper icon display
-- Package managers you want to check (brew, npm, pip3, gem, cargo)
+- Package managers you want to check (brew, npm, pip3, gem, cargo, pi, herdr)
 - `timeout` or `gtimeout` from GNU coreutils. The poller prefers `timeout` and
   falls back to `gtimeout`; on macOS, install it with `brew install coreutils`
 
@@ -179,6 +181,12 @@ set -g @outdated_mouse_click 'off'
 
 - For cargo support, install `cargo-install-update`: `cargo install cargo-update`
 - For Go support, install `go-global-update`
+- For Pi extension support, install `pi`; the poller checks Pi's own npm prefix
+  with `npm outdated --json`, separate from `npm outdated -g`, and the update
+  action runs `pi update --extensions`
+- For Herdr plugin support, install `herdr` and `git`; the poller compares each
+  GitHub plugin SHA from `herdr plugin list` with `git ls-remote`, and the
+  update action reinstalls outdated plugins with `herdr plugin install owner/repo --yes`
 - The background poller automatically starts when tmux loads the plugin
 - Cache is stored in `$TMPDIR/tmux-outdated-packages` (usually `/tmp`)
 - Only one poller instance runs at a time (managed via an atomic lock with PID
