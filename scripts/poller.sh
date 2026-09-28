@@ -637,21 +637,6 @@ check_pi() {
 		start=$(date +%s)
 		local raw_output
 		raw_output=$(cd "$PI_NPM_PREFIX" && capture_check_output pi 1 npm outdated --json) || return
-		local count
-		# shellcheck disable=SC2016 # JavaScript program is passed literally to node.
-		count=$(printf '%s' "$raw_output" | node -e '
-const chunks = [];
-process.stdin.on("data", chunk => chunks.push(chunk));
-process.stdin.on("end", () => {
-  const input = Buffer.concat(chunks).toString().trim();
-  if (!input) {
-    console.log(0);
-    return;
-  }
-  const data = JSON.parse(input);
-  console.log(Object.keys(data).length);
-});
-') || return
 		local output
 		# shellcheck disable=SC2016 # JavaScript program is passed literally to node.
 		output=$(printf '%s' "$raw_output" | node -e '
@@ -662,14 +647,38 @@ process.stdin.on("end", () => {
   if (!input) {
     return;
   }
-  const data = JSON.parse(input);
+
+  let data;
+  try {
+    data = JSON.parse(input);
+  } catch (_err) {
+    process.exitCode = 1;
+    return;
+  }
+
+  if (!data || typeof data !== "object" || Array.isArray(data) ||
+      Object.prototype.hasOwnProperty.call(data, "error")) {
+    process.exitCode = 1;
+    return;
+  }
+
   for (const [name, info] of Object.entries(data)) {
-    const current = info.current || "?";
-    const latest = info.latest || info.wanted || "?";
+    if (!info || typeof info !== "object" || Array.isArray(info)) {
+      continue;
+    }
+    const current = info.current;
+    const latest = info.latest || info.wanted;
+    if (!current || !latest) {
+      continue;
+    }
     console.log(`${name} ${current} -> ${latest}`);
   }
 });
 ') || return
+		local count=0
+		if [ -n "$output" ]; then
+			count=$(printf '%s\n' "$output" | grep -c '[^[:space:]]')
+		fi
 		local duration=$(($(date +%s) - start))
 		write_check_result pi "$count" "$output" || return
 		log_debug "pi: Found $count outdated packages (took ${duration}s)"
@@ -689,18 +698,30 @@ check_herdr() {
 		# shellcheck disable=SC2016 # Helper script is passed literally to bash -c.
 		output=$(capture_check_output herdr '' bash -c '
 set -uo pipefail
+log_file=${1:-}
+debug_mode=${2:-0}
+log_skip() {
+  [ "$debug_mode" = "1" ] || return 0
+  [ -n "$log_file" ] || return 0
+  { printf "[%s] herdr: %s\n" "$(date "+%Y-%m-%d %H:%M:%S")" "$*" >> "$log_file"; } 2>/dev/null || true
+}
+
 plugin_list=$(herdr plugin list) || exit
 while IFS= read -r line; do
   repo=$(printf "%s\n" "$line" | sed -nE "s/.*\[github:([^]@]+)@([0-9a-fA-F]{40})\].*/\1/p")
   installed=$(printf "%s\n" "$line" | sed -nE "s/.*\[github:([^]@]+)@([0-9a-fA-F]{40})\].*/\2/p")
   [ -n "$repo" ] && [ -n "$installed" ] || continue
-  if ! remote=$(GIT_TERMINAL_PROMPT=0 git ls-remote "https://github.com/$repo" HEAD); then
-    exit 1
+  if ! remote_output=$(GIT_TERMINAL_PROMPT=0 git ls-remote "https://github.com/$repo" HEAD); then
+    log_skip "Skipping $repo because git ls-remote failed"
+    continue
   fi
-  remote=$(printf "%s\n" "$remote" | awk "NR == 1 { print \$1; exit }")
+  remote=$(printf "%s\n" "$remote_output" | awk "NR == 1 { print \$1; exit }")
   case "$remote" in
     [0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F]) ;;
-    *) exit 1 ;;
+    *)
+      log_skip "Skipping $repo because git ls-remote returned an unexpected HEAD"
+      continue
+      ;;
   esac
   installed=$(printf "%s" "$installed" | tr "[:upper:]" "[:lower:]")
   remote=$(printf "%s" "$remote" | tr "[:upper:]" "[:lower:]")
@@ -708,7 +729,7 @@ while IFS= read -r line; do
     printf "%s %s -> %s\n" "$repo" "$installed" "$remote"
   fi
 done <<<"$plugin_list"
-') || return
+' _ "$LOG_FILE" "$DEBUG_MODE") || return
 		local count=0
 		if [ -n "$output" ]; then
 			count=$(printf '%s\n' "$output" | grep -c '[^[:space:]]')

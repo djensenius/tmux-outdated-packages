@@ -33,22 +33,27 @@ pip_upgrade_all() {
 }
 
 herdr_update_outdated_plugins() {
-    local list_file="$CACHE_DIR/herdr.list"
+    local list_file="$CACHE_DIR/herdr.list" plugin found=0 failed=0
     if [ ! -f "$list_file" ]; then
         echo "No Herdr plugin list found"
         return 1
     fi
-    local plugins
-    plugins=$(awk '{ print $1 }' "$list_file")
-    if [ -z "$plugins" ]; then
+    while IFS= read -r plugin; do
+        [ -n "$plugin" ] || continue
+        found=1
+        if [[ ! "$plugin" =~ ^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$ ]]; then
+            echo "Skipping invalid Herdr plugin name: $plugin"
+            failed=1
+            continue
+        fi
+        echo "${BOLD}Reinstalling ${plugin}...${RESET}"
+        herdr plugin install "$plugin" --yes </dev/null || failed=1
+    done < <(awk '{ print $1 }' "$list_file")
+    if [ "$found" -eq 0 ]; then
         echo "No plugins to update"
         return 0
     fi
-    echo "$plugins" | while IFS= read -r plugin; do
-        [ -n "$plugin" ] || continue
-        echo "${BOLD}Reinstalling ${plugin}...${RESET}"
-        herdr plugin install "$plugin" --yes
-    done
+    return "$failed"
 }
 
 # Collect outdated managers into arrays
