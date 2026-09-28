@@ -61,6 +61,10 @@ if [ "${1:-}" = outdated ] && [ "${2:-}" = --json ]; then
 			printf '%s\n' '{"error":{"code":"ENOTFOUND","summary":"network failed"}}'
 			exit 1
 			;;
+		package-named-error)
+			printf '%s\n' '{"error":{"current":"1.0.0","wanted":"1.1.0","latest":"1.1.0"}}'
+			exit 1
+			;;
 		invalid)
 			printf '%s\n' '{not json}'
 			exit 1
@@ -182,6 +186,16 @@ if check_pi; then
 fi
 unset NPM_OUTDATED_MODE
 assert_no_cache_files pi
+
+reset_cache
+export NPM_OUTDATED_MODE=package-named-error
+check_pi
+unset NPM_OUTDATED_MODE
+[ "$(cat "$CACHE_DIR/pi.count")" = 1 ] || {
+	printf '%s\n' 'An outdated package named "error" was dropped' >&2
+	exit 1
+}
+grep -Fxq 'error 1.0.0 -> 1.1.0' "$CACHE_DIR/pi.list"
 
 reset_cache
 mkdir -p "$TEST_TMP/missing-pi-bin"

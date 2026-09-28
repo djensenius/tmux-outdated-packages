@@ -656,8 +656,13 @@ process.stdin.on("end", () => {
     return;
   }
 
-  if (!data || typeof data !== "object" || Array.isArray(data) ||
-      Object.prototype.hasOwnProperty.call(data, "error")) {
+  // npm reports failures as {"error": {"code": ..., "summary": ...}}. A real
+  // package named "error" has current/wanted/latest instead, so keep it.
+  const npmError = data && typeof data === "object" && !Array.isArray(data) ? data.error : undefined;
+  const isNpmError = npmError && typeof npmError === "object" &&
+    !("current" in npmError) && !("wanted" in npmError) && !("latest" in npmError) &&
+    ("code" in npmError || "summary" in npmError || "detail" in npmError);
+  if (!data || typeof data !== "object" || Array.isArray(data) || isNpmError) {
     process.exitCode = 1;
     return;
   }
