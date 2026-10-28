@@ -13,7 +13,7 @@ _Screenshots using [Catppuccin](https://github.com/catppuccin/catppuccin) theme.
 - Shows outdated package counts for:
   - 🍺 Homebrew (`brew`)
   - 󰎙 npm global packages (`npm -g`)
-  - 󰐗 Pi packages in `${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}/npm` (`pi`)
+  - π Pi packages in `${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}/npm` (`pi`)
   -  pip/pip3
   -  Ruby gems
   -  Rust cargo packages (requires `cargo-install-update`)
@@ -21,7 +21,8 @@ _Screenshots using [Catppuccin](https://github.com/catppuccin/catppuccin) theme.
   -  Go packages (requires `go-global-update`)
   -  APT packages (Debian/Ubuntu)
   -  DNF packages (Fedora/RHEL)
-  -  Herdr plugins installed from GitHub (`herdr plugin list`)
+  -  tmux plugins installed with TPM
+  - H Herdr plugins installed from GitHub (`herdr plugin list`)
 - Only displays when outdated packages are present
 - Uses nerdfonts icons for a clean look
 - Integrates with Catppuccin theme
@@ -184,6 +185,16 @@ set -g @outdated_mouse_click 'off'
 - For Pi extension support, install `pi`; the poller checks Pi's own npm prefix
   with `npm outdated --json`, separate from `npm outdated -g`, and the update
   action runs `pi update --extensions`
+- For tmux plugin support, install `git`; the poller honors
+  `TMUX_PLUGIN_MANAGER_PATH` from the environment or tmux's global environment,
+  then falls back to `${XDG_CONFIG_HOME:-$HOME/.config}/tmux/plugins` if it exists,
+  or `~/.tmux/plugins`. It fetches each Git plugin's tracked branch without
+  changing its working tree and counts plugins with incoming commits. The
+  update action updates only listed plugins using fast-forward-only pulls;
+  pinned/detached checkouts, symlinked plugins, and plugins without a tracked
+  remote branch are skipped. Local edits and divergent local commits are never
+  overwritten. Reload your tmux configuration after updating plugins to activate
+  their changes
 - For Herdr plugin support, install `herdr` and `git`; the poller compares each
   GitHub plugin SHA from `herdr plugin list` with `git ls-remote`, and the
   update action reinstalls outdated plugins with `herdr plugin install owner/repo --yes`
