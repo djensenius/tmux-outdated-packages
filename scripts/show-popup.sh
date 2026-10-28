@@ -6,6 +6,8 @@ CURRENT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 # Load shared icons
 # shellcheck disable=SC1091
 source "$CURRENT_DIR/icons.sh"
+# shellcheck disable=SC1091
+source "$CURRENT_DIR/tmux-plugins.sh"
 
 # ANSI colour codes
 BOLD=$'\033[1m'
@@ -107,6 +109,7 @@ add_manager "$GO_ICON"       "Go"        "go.count"       "go-global-update"    
 add_manager "$APT_ICON"      "Apt"       "apt.count"      "sudo apt upgrade"        "apt.list"      "$GREEN"
 add_manager "$DNF_ICON"      "DNF"       "dnf.count"      "sudo dnf upgrade"        "dnf.list"      "$BLUE"
 add_manager "$MISE_ICON"     "Mise"      "mise.count"     "mise upgrade"            "mise.list"     "$MAGENTA"
+add_manager "$TMUX_ICON"     "tmux"      "tmux.count"     "tmux_update_outdated_plugins" "tmux.list" "$GREEN"
 add_manager "$HERDR_ICON"    "Herdr"     "herdr.count"    "herdr_update_outdated_plugins" "herdr.list" "$CYAN"
 add_manager "$PIP_ICON"      "pip"       "pip.count"      "pip_upgrade_all"         "pip.list"      "$BLUE"
 

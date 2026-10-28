@@ -137,6 +137,7 @@ check_apt() { :; }
 check_dnf() { :; }
 check_mise() { :; }
 check_pi() { :; }
+check_tmux() { :; }
 check_herdr() { :; }
 
 trap handle_sigusr1 USR1

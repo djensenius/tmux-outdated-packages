@@ -31,3 +31,6 @@ jobs:
 
       - name: Test Pi and Herdr managers
         run: tests/pi-herdr-manager-test.sh
+
+      - name: Test tmux plugins and status icons
+        run: tests/tmux-manager-test.sh

@@ -2,6 +2,8 @@
 
 CACHE_DIR="${TMPDIR:-/tmp}/tmux-outdated-packages"
 CURRENT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+# shellcheck disable=SC1091
+source "$CURRENT_DIR/tmux-plugins.sh"
 
 # ANSI colour codes
 BOLD=$'\033[1m'
@@ -88,6 +90,7 @@ check_manager "Go"        "go.count"       "go-global-update"         "go.list"
 check_manager "apt"       "apt.count"      "sudo apt upgrade"         "apt.list"
 check_manager "DNF"       "dnf.count"      "sudo dnf upgrade"         "dnf.list"
 check_manager "Mise"      "mise.count"     "mise upgrade"             "mise.list"
+check_manager "tmux"      "tmux.count"     "tmux_update_outdated_plugins" "tmux.list"
 check_manager "Herdr"     "herdr.count"    "herdr_update_outdated_plugins" "herdr.list"
 check_manager "pip"       "pip.count"      "pip_upgrade_all"          "pip.list"
 

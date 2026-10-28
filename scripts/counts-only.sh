@@ -8,6 +8,7 @@ npm_count=0
 gem_count=0
 pipx_count=0
 pi_count=0
+tmux_count=0
 herdr_count=0
 
 [ -f "$CACHE_DIR/brew.count" ] && brew_count=$(cat "$CACHE_DIR/brew.count" 2>/dev/null || echo 0)
@@ -15,9 +16,10 @@ herdr_count=0
 [ -f "$CACHE_DIR/gem.count" ] && gem_count=$(cat "$CACHE_DIR/gem.count" 2>/dev/null || echo 0)
 [ -f "$CACHE_DIR/pipx.count" ] && pipx_count=$(cat "$CACHE_DIR/pipx.count" 2>/dev/null || echo 0)
 [ -f "$CACHE_DIR/pi.count" ] && pi_count=$(cat "$CACHE_DIR/pi.count" 2>/dev/null || echo 0)
+[ -f "$CACHE_DIR/tmux.count" ] && tmux_count=$(cat "$CACHE_DIR/tmux.count" 2>/dev/null || echo 0)
 [ -f "$CACHE_DIR/herdr.count" ] && herdr_count=$(cat "$CACHE_DIR/herdr.count" 2>/dev/null || echo 0)
 
-total=$((brew_count + npm_count + gem_count + pipx_count + pi_count + herdr_count))
+total=$((brew_count + npm_count + gem_count + pipx_count + pi_count + tmux_count + herdr_count))
 
 if [ $total -gt 0 ]; then
     echo " ${total}"

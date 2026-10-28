@@ -72,6 +72,12 @@ format_output() {
 		[ "$count" -gt 0 ] && output+=" ${MISE_ICON} ${count}"
 	}
 
+	[ -f "$CACHE_DIR/tmux.count" ] && {
+		local count
+		count=$(cat "$CACHE_DIR/tmux.count")
+		[ "$count" -gt 0 ] && output+=" ${TMUX_ICON} ${count}"
+	}
+
 	[ -f "$CACHE_DIR/herdr.count" ] && {
 		local count
 		count=$(cat "$CACHE_DIR/herdr.count")

@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
 
+CURRENT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+# shellcheck disable=SC1091
+source "$CURRENT_DIR/tmux-plugins.sh"
+
 CACHE_DIR="${TMPDIR:-/tmp}/tmux-outdated-packages"
 export PATH="$PATH:/opt/homebrew/bin:/usr/local/bin"
 POLL_INTERVAL="${TMUX_OUTDATED_POLL_INTERVAL:-300}"  # Default 5 minutes
@@ -690,6 +694,33 @@ process.stdin.on("end", () => {
 	fi
 }
 
+check_tmux() {
+	if ! command -v git &> /dev/null; then
+		log_debug "tmux: git not installed, skipping"
+		return
+	fi
+	local plugin_dir
+	plugin_dir=$(tmux_plugin_directory) || return
+	if [ ! -d "$plugin_dir" ]; then
+		log_debug "tmux: Plugin directory not found at $plugin_dir, skipping"
+		return
+	fi
+
+	if should_check "tmux" "$plugin_dir"; then
+		local start
+		start=$(date +%s)
+		local output
+		output=$(capture_check_output tmux '' bash "$CURRENT_DIR/tmux-plugins.sh" "$plugin_dir") || return
+		local count=0
+		if [ -n "$output" ]; then
+			count=$(printf '%s\n' "$output" | grep -c '[^[:space:]]')
+		fi
+		local duration=$(($(date +%s) - start))
+		write_check_result tmux "$count" "$output" || return
+		log_debug "tmux: Found $count outdated plugins (took ${duration}s)"
+	fi
+}
+
 check_herdr() {
 	if ! command -v herdr &> /dev/null || ! command -v git &> /dev/null; then
 		log_debug "herdr: Not installed or git missing, skipping"
@@ -797,6 +828,7 @@ run_checks_parallel() {
 	check_dnf & pids+=("$!")
 	check_mise & pids+=("$!")
 	check_pi & pids+=("$!")
+	check_tmux & pids+=("$!")
 	check_herdr & pids+=("$!")
 	
 	# A trapped refresh signal interrupts wait. Retry only that status so
